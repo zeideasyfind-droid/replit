@@ -1,0 +1,174 @@
+Build a production-ready internal admin web app for EasyFind Property Solutions.
+
+Goal:
+Create a web application where I can upload real-estate property images and details, submit the form, and automatically create or update an item in my existing Meta Commerce catalog that is linked to my WhatsApp Business account. Images must be uploaded to Cloudinary first, and the created property should optionally trigger a WhatsApp confirmation message to my test number.
+
+Platform:
+- Build this in Replit.
+- Use Python 3.11 + FastAPI for backend.
+- Use simple server-rendered HTML/CSS/JS for frontend.
+- The app must run correctly inside Replit and also be deployable from Replit Deployments.
+- Do NOT hardcode secrets in source files. Add them as Replit Secrets and read them from environment variables.
+
+Required Replit Secrets to create:
+- META_CATALOG_ID=<redacted>
+- META_APP_ID=<redacted>
+- META_ACCESS_TOKEN=<redacted>
+- WHATSAPP_ACCESS_TOKEN=<redacted>
+- WHATSAPP_PHONE_NUMBER_ID=<redacted>
+- WHATSAPP_RECIPIENT_NUMBER=<redacted>
+- CLOUDINARY_CLOUD_NAME=<redacted>
+- CLOUDINARY_API_KEY=<redacted>
+- CLOUDINARY_API_SECRET=<redacted>
+- GOOGLE_MAPS_API_KEY=<redacted>
+- ADMIN_AUTH_TOKEN=<redacted>
+
+Important:
+- On startup, validate that all required secrets exist.
+- If any are missing, fail fast with a readable error message listing the missing environment variable names.
+- Never print full secret values in logs.
+
+App features:
+
+1. Admin UI
+- Route: GET /admin/property
+- Show a mobile-friendly form with:
+  - property_id
+  - title
+  - description
+  - price
+  - currency (default INR)
+  - city
+  - locality
+  - bhk
+  - property_type
+  - availability
+  - multiple image upload
+- Protect the page using ADMIN_AUTH_TOKEN via:
+  - Authorization: Bearer <ADMIN_AUTH_TOKEN>
+  OR
+  - query parameter ?token=<ADMIN_AUTH_TOKEN>
+
+2. Image upload
+- On POST /admin/property:
+  - Upload all received images to Cloudinary.
+  - Capture secure_url values.
+  - Use the first image as the primary image_link for Meta catalog creation.
+
+3. Meta catalog creation
+- Use the Meta catalog items_batch endpoint:
+  POST https://graph.facebook.com/v25.0/{META_CATALOG_ID}/items_batch
+- Send:
+  - item_type=PRODUCT_ITEM
+  - requests=[{...}]
+- Build the request in Indian real-estate format:
+  - id = property_id
+  - title = form title
+  - description = form description
+  - price = "{price} INR"
+  - image_link = first Cloudinary secure_url
+  - link = "https://easyfindprops.com/property/{property_id}"
+  - availability = "in stock" unless sold, then "out of stock"
+  - condition = "new"
+  - brand = "EasyFind Realty Solutions"
+- Use allow_upsert behavior if supported, otherwise check for existing ID and update cleanly.
+- Store and display the REAL Meta response.
+- Do not use fake or mock success IDs in production mode.
+
+4. WhatsApp confirmation
+- After successful catalog creation, send a WhatsApp text message to WHATSAPP_RECIPIENT_NUMBER using:
+  POST https://graph.facebook.com/v18.0/{WHATSAPP_PHONE_NUMBER_ID}/messages
+- Message should summarize:
+  - property_id
+  - title
+  - price
+  - locality
+  - city
+  - image URL
+- If WhatsApp fails, log it, but do not mark catalog creation as failed.
+
+5. Success page
+- After submit, show:
+  - Property ID
+  - Title
+  - Price
+  - Locality, City
+  - Primary Cloudinary image
+  - Real Meta response or created item info
+  - WhatsApp send status
+  - Google Maps search link for locality + city
+- If using mock mode, clearly label "MOCK MODE".
+- Default must be LIVE MODE when secrets are present.
+
+6. Debug endpoints
+- GET /catalog/property/{property_id}
+- Return the last payload sent to Meta and the last raw Meta response for that property.
+- Protect this endpoint with ADMIN_AUTH_TOKEN.
+
+7. Project structure
+- main.py
+- templates/
+- static/
+- services/cloudinary_service.py
+- services/meta_catalog_service.py
+- services/whatsapp_service.py
+- utils/auth.py
+- requirements.txt
+- README.md
+
+8. Replit configuration
+- Provide everything needed so the app runs on Replit with one click.
+- Use Replit Secrets, not .env files.
+- Make sure the web server binds to 0.0.0.0 on the Replit-assigned port.
+- Include a README section called "Replit Secrets Setup" listing every secret key name exactly.
+
+9. Validation and debugging
+- Add clear structured logs:
+  - Cloudinary upload start/success/failure
+  - Meta items_batch request and sanitized response
+  - WhatsApp message request and sanitized response
+- Add a visible note on success page showing whether response is real or mocked.
+- Never show a fake success if Meta request fails.
+- If Meta request fails, show the actual error returned by Graph API.
+
+10. Include example API calls in README
+Include these examples adapted to Indian real-estate usage:
+
+A) Get catalog details:
+curl -i -G \
+  'https://graph.facebook.com/v25.0/<CATALOG_ID>?fields=id,name,product_count' \
+  -d 'access_token=YOUR_META_ACCESS_TOKEN'
+
+B) Create real-estate sample products:
+curl -i -X POST \
+  'https://graph.facebook.com/v25.0/<CATALOG_ID>/items_batch' \
+  -d 'item_type=PRODUCT_ITEM' \
+  -d 'requests=[
+  {
+    "method": "CREATE",
+    "data": {
+      "id": "test_property_retailer_id_1",
+      "title": "2 BHK Apartment • Sarjapur Road, Bengaluru",
+      "description": "HTML <b>2 BHK</b> apartment near Sarjapur Road, Bengaluru.",
+      "price": "30000 INR",
+      "image_link": "https://res.cloudinary.com/<cloud_name>/image/upload/v1/property_1.jpg",
+      "link": "https://easyfindprops.com/property/test_property_retailer_id_1",
+      "availability": "in stock",
+      "condition": "new",
+      "brand": "EasyFind Realty Solutions"
+    }
+  }
+]' \
+  -d 'access_token=YOUR_META_ACCESS_TOKEN'
+
+C) Fetch catalog products:
+curl -i -G \
+  'https://graph.facebook.com/v25.0/<CATALOG_ID>/products' \
+  -d 'filter={"name":{"i_contains":"Apartment"}}' \
+  -d 'fields=retailer_id,id,name,category,errors' \
+  -d 'access_token=YOUR_META_ACCESS_TOKEN'
+
+Final requirement:
+- Build the app in LIVE mode by default when secrets are present.
+- Do not leave placeholder mock responses unless explicitly gated by a MOCK_MODE environment variable.
+- Show the actual Graph API response on success so I can verify catalog creation.

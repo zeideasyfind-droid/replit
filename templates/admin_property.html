@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Add Property — EasyFind Admin</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <div>
+    <div class="logo">EasyFind Admin</div>
+    <div class="sub">EasyFind Property Solutions — Internal Tool</div>
+  </div>
+  <div style="margin-left:auto">
+    {% if mock_mode %}
+      <span class="badge badge-mock">⚠ Mock Mode</span>
+    {% else %}
+      <span class="badge badge-live">● Live Mode</span>
+    {% endif %}
+  </div>
+</header>
+
+<div class="container">
+
+  {% if errors %}
+  <div class="alert alert-error">
+    <strong>Please fix the following errors:</strong>
+    <ul style="margin-top:6px;padding-left:16px">
+      {% for e in errors %}<li>{{ e }}</li>{% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <div class="card">
+    <h2>🏠 Add / Update Property Listing</h2>
+
+    <form method="POST" action="/admin/property{% if token %}?token={{ token }}{% endif %}"
+          enctype="multipart/form-data" id="prop-form">
+
+      <div class="form-grid">
+
+        <div class="form-group">
+          <label for="property_id">Property ID *</label>
+          <input type="text" id="property_id" name="property_id" required
+                 placeholder="e.g. EF-BLR-001"
+                 value="{{ form_data.property_id if form_data else '' }}">
+        </div>
+
+        <div class="form-group">
+          <label for="property_type">Property Type *</label>
+          <select id="property_type" name="property_type" required>
+            {% set sel = form_data.property_type if form_data else '' %}
+            <option value="" disabled {% if not sel %}selected{% endif %}>Select type</option>
+            {% for t in ['Apartment','Villa','Plot','Commercial','Row House','Penthouse','Studio'] %}
+            <option value="{{ t }}" {% if sel == t %}selected{% endif %}>{{ t }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="form-group full">
+          <label for="title">Title *</label>
+          <input type="text" id="title" name="title" required
+                 placeholder="e.g. 2 BHK Apartment • Sarjapur Road, Bengaluru"
+                 value="{{ form_data.title if form_data else '' }}">
+        </div>
+
+        <div class="form-group full">
+          <label for="description">Description *</label>
+          <textarea id="description" name="description" required
+                    placeholder="Property details, amenities, nearby landmarks...">{{ form_data.description if form_data else '' }}</textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="price">Price *</label>
+          <input type="number" id="price" name="price" required min="0"
+                 placeholder="e.g. 4500000"
+                 value="{{ form_data.price if form_data else '' }}">
+        </div>
+
+        <div class="form-group">
+          <label for="currency">Currency</label>
+          <select id="currency" name="currency">
+            {% set cur = form_data.currency if form_data else 'INR' %}
+            <option value="INR" {% if cur == 'INR' %}selected{% endif %}>INR ₹</option>
+            <option value="USD" {% if cur == 'USD' %}selected{% endif %}>USD $</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="city">City *</label>
+          <input type="text" id="city" name="city" required
+                 placeholder="e.g. Bengaluru"
+                 value="{{ form_data.city if form_data else '' }}">
+        </div>
+
+        <div class="form-group">
+          <label for="locality">Locality *</label>
+          <input type="text" id="locality" name="locality" required
+                 placeholder="e.g. Sarjapur Road"
+                 value="{{ form_data.locality if form_data else '' }}">
+        </div>
+
+        <div class="form-group">
+          <label for="bhk">BHK / Config *</label>
+          <select id="bhk" name="bhk" required>
+            {% set b = form_data.bhk if form_data else '' %}
+            <option value="" disabled {% if not b %}selected{% endif %}>Select</option>
+            {% for opt in ['1 BHK','2 BHK','3 BHK','4 BHK','4+ BHK','Studio','Plot','Commercial'] %}
+            <option value="{{ opt }}" {% if b == opt %}selected{% endif %}>{{ opt }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="availability">Availability *</label>
+          <select id="availability" name="availability" required>
+            {% set av = form_data.availability if form_data else '' %}
+            <option value="" disabled {% if not av %}selected{% endif %}>Select</option>
+            <option value="available" {% if av == 'available' %}selected{% endif %}>Available</option>
+            <option value="under construction" {% if av == 'under construction' %}selected{% endif %}>Under Construction</option>
+            <option value="sold" {% if av == 'sold' %}selected{% endif %}>Sold</option>
+          </select>
+        </div>
+
+        <div class="form-group full">
+          <label>Property Images * <span style="color:var(--muted);text-transform:none;font-weight:400">(first image = primary listing image)</span></label>
+          <div class="file-zone" id="file-zone" onclick="document.getElementById('images').click()">
+            <div style="font-size:28px">📷</div>
+            <div style="font-weight:600;margin-top:4px">Click to upload images</div>
+            <div class="hint">JPEG, PNG, WEBP — up to 10 files</div>
+            <input type="file" id="images" name="images" accept="image/*" multiple required>
+          </div>
+          <div id="file-preview"></div>
+        </div>
+
+      </div><!-- /form-grid -->
+
+      <div style="margin-top:22px">
+        <button type="submit" class="btn btn-primary btn-block" id="submit-btn">
+          <span class="spinner" id="spinner"></span>
+          <span id="submit-label">🚀 Submit to Meta Catalog</span>
+        </button>
+      </div>
+
+    </form>
+  </div><!-- /card -->
+</div>
+
+<footer>EasyFind Property Solutions &copy; 2025 — Internal Admin Tool</footer>
+
+<script>
+const input = document.getElementById('images');
+const preview = document.getElementById('file-preview');
+const form = document.getElementById('prop-form');
+const spinner = document.getElementById('spinner');
+const submitLabel = document.getElementById('submit-label');
+
+input.addEventListener('change', () => {
+  preview.innerHTML = '';
+  Array.from(input.files).forEach(file => {
+    const img = document.createElement('img');
+    img.src = URL.createObjectURL(file);
+    img.onload = () => URL.revokeObjectURL(img.src);
+    preview.appendChild(img);
+  });
+});
+
+form.addEventListener('submit', () => {
+  spinner.style.display = 'block';
+  submitLabel.textContent = 'Uploading & submitting…';
+  document.getElementById('submit-btn').disabled = true;
+});
+</script>
+</body>
+</html>

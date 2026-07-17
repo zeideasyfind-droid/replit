@@ -1,5 +1,39 @@
+modules = ["python-3.11"]
 [agent]
 expertMode = true
 
 [nix]
 channel = "stable-25_05"
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start application"
+
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python main.py"
+waitForPort = 5000
+
+[userenv]
+
+[userenv.shared]
+CLOUDINARY_CLOUD_NAME = "dcvwsclyc"
+META_APP_ID = "1897860514267804"
+META_CATALOG_ID = "1674288420320509"
+WHATSAPP_PHONE_NUMBER_ID = "1085572627976973"
+WHATSAPP_RECIPIENT_NUMBER = "919148338801"
