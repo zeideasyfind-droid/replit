@@ -1,0 +1,121 @@
+Make the property-entry UI simpler and more operator-friendly.
+
+1. Replace the current separated form layout with 4 clear sections only:
+
+SECTION A — Property Details
+- One full-width structured block for all property details.
+- Include:
+  - property title
+  - property type
+  - listing type
+  - rent / sale price
+  - currency
+  - deposit
+  - maintenance
+  - BHK / bedrooms / bathrooms
+  - furnishing
+  - super built-up / carpet area
+  - facing
+  - floor / total floors
+  - parking
+  - availability status
+  - description
+  - amenities
+  - broker / owner name
+  - phone / WhatsApp
+- Do not split this into separate rent vs sale blocks.
+- Keep one unified details block and let the app decide which values are relevant.
+
+SECTION B — Location
+- One dedicated full-width location block.
+- Include:
+  - property name / building name
+  - house / flat number
+  - street
+  - landmark
+  - locality / area
+  - city
+  - state
+  - pincode
+  - Google Maps link
+  - latitude
+  - longitude
+- Add one combined address preview field generated from the inputs.
+
+SECTION C — Images
+- One dedicated media block for all property images.
+- Support:
+  - multiple upload
+  - drag and drop
+  - paste image URLs
+  - reorder images
+  - image preview grid
+  - remove image
+- Treat all uploaded images as one gallery list.
+
+SECTION D — Cover Image
+- A separate block only for selecting the cover image.
+- Let the user choose the cover image from the uploaded gallery.
+- Show a clear “Set as cover” action on each image card.
+- Visually mark the selected cover image.
+- Do not require uploading the cover separately unless no gallery image exists.
+
+2. Add smart paste / smart mapping
+- Add one large textarea at the top called:
+  “Paste raw property details”
+- When the user pastes an unstructured property description, parse it and intelligently map values into the correct fields.
+- Extract and map things like:
+  - title
+  - area / locality
+  - BHK
+  - rent / price
+  - maintenance
+  - deposit
+  - furnishing
+  - availability
+  - area size
+  - floor
+  - amenities
+  - landmark
+  - broker / contact
+  - phone number
+  - Google Maps link
+- Use best-effort extraction, but never overwrite an already manually edited field without confirmation.
+- If confidence is low, leave the field blank instead of guessing.
+- Show a review state:
+  - auto-filled fields highlighted
+  - uncertain fields flagged for manual review
+
+3. Smart mapping rules
+- If pasted text contains “rent”, “monthly”, or “per month”, map to rental pricing.
+- If pasted text contains “sale”, “asking”, or “cr”, “crore”, “lakh”, map to sale price.
+- If pasted text contains “semi furnished”, “fully furnished”, “unfurnished”, map to furnishing.
+- If pasted text contains “2bhk”, “3 bhk”, etc., map to BHK/title metadata.
+- If pasted text contains “sqft”, “sq ft”, “square feet”, map to area.
+- If pasted text contains a Google Maps URL, store it in the maps field.
+- If pasted text contains multiple image URLs, push them into the gallery.
+- If pasted text contains a mobile number, map it to contact number.
+- If pasted text contains comma-separated amenities, split them into chips/tags.
+
+4. UX behavior
+- Make the form desktop-first but mobile-usable.
+- Keep labels clear and operator-friendly.
+- Use autosave draft behavior in memory during the session.
+- Show validation only where truly needed.
+- Keep submission to one primary CTA:
+  “Create / Update Property”
+- Add secondary actions:
+  - Save draft
+  - Clear mapped values
+  - Re-run smart mapping
+
+5. Output behavior
+- On submit, create one normalized property payload from all sections.
+- Use the selected cover image as the primary image.
+- Keep the remaining gallery images as secondary images.
+- Ensure the final payload is clean, normalized, and ready for backend catalog creation.
+
+6. Important constraint
+- Do not redesign the whole app.
+- Only refactor the property-entry form UX and the mapping logic.
+- Keep the backend integration points unchanged for now.

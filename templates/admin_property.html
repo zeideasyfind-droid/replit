@@ -7,12 +7,14 @@
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+
 <header>
   <div>
     <div class="logo">EasyFind Admin</div>
     <div class="sub">EasyFind Property Solutions — Internal Tool</div>
   </div>
-  <div style="margin-left:auto">
+  <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
+    <span id="draft-indicator" style="font-size:11px;opacity:.7;display:none">Draft saved</span>
     {% if mock_mode %}
       <span class="badge badge-mock">⚠ Mock Mode</span>
     {% else %}
@@ -32,145 +34,830 @@
   </div>
   {% endif %}
 
-  <div class="card">
-    <h2>🏠 Add / Update Property Listing</h2>
+  <form method="POST" action="/admin/property{% if token %}?token={{ token }}{% endif %}"
+        enctype="multipart/form-data" id="prop-form">
 
-    <form method="POST" action="/admin/property{% if token %}?token={{ token }}{% endif %}"
-          enctype="multipart/form-data" id="prop-form">
+    <!-- Hidden fields for image gallery -->
+    <input type="hidden" name="pasted_image_urls" id="pasted_image_urls_field">
+    <input type="hidden" name="cover_image_index" id="cover_image_index_field" value="0">
 
-      <div class="form-grid">
-
-        <div class="form-group">
-          <label for="property_id">Property ID *</label>
-          <input type="text" id="property_id" name="property_id" required
-                 placeholder="e.g. EF-BLR-001"
-                 value="{{ form_data.property_id if form_data else '' }}">
-        </div>
-
-        <div class="form-group">
-          <label for="property_type">Property Type *</label>
-          <select id="property_type" name="property_type" required>
-            {% set sel = form_data.property_type if form_data else '' %}
-            <option value="" disabled {% if not sel %}selected{% endif %}>Select type</option>
-            {% for t in ['Apartment','Villa','Plot','Commercial','Row House','Penthouse','Studio'] %}
-            <option value="{{ t }}" {% if sel == t %}selected{% endif %}>{{ t }}</option>
-            {% endfor %}
-          </select>
-        </div>
-
-        <div class="form-group full">
-          <label for="title">Title *</label>
-          <input type="text" id="title" name="title" required
-                 placeholder="e.g. 2 BHK Apartment • Sarjapur Road, Bengaluru"
-                 value="{{ form_data.title if form_data else '' }}">
-        </div>
-
-        <div class="form-group full">
-          <label for="description">Description *</label>
-          <textarea id="description" name="description" required
-                    placeholder="Property details, amenities, nearby landmarks...">{{ form_data.description if form_data else '' }}</textarea>
-        </div>
-
-        <div class="form-group">
-          <label for="price">Price *</label>
-          <input type="number" id="price" name="price" required min="0"
-                 placeholder="e.g. 4500000"
-                 value="{{ form_data.price if form_data else '' }}">
-        </div>
-
-        <div class="form-group">
-          <label for="currency">Currency</label>
-          <select id="currency" name="currency">
-            {% set cur = form_data.currency if form_data else 'INR' %}
-            <option value="INR" {% if cur == 'INR' %}selected{% endif %}>INR ₹</option>
-            <option value="USD" {% if cur == 'USD' %}selected{% endif %}>USD $</option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label for="city">City *</label>
-          <input type="text" id="city" name="city" required
-                 placeholder="e.g. Bengaluru"
-                 value="{{ form_data.city if form_data else '' }}">
-        </div>
-
-        <div class="form-group">
-          <label for="locality">Locality *</label>
-          <input type="text" id="locality" name="locality" required
-                 placeholder="e.g. Sarjapur Road"
-                 value="{{ form_data.locality if form_data else '' }}">
-        </div>
-
-        <div class="form-group">
-          <label for="bhk">BHK / Config *</label>
-          <select id="bhk" name="bhk" required>
-            {% set b = form_data.bhk if form_data else '' %}
-            <option value="" disabled {% if not b %}selected{% endif %}>Select</option>
-            {% for opt in ['1 BHK','2 BHK','3 BHK','4 BHK','4+ BHK','Studio','Plot','Commercial'] %}
-            <option value="{{ opt }}" {% if b == opt %}selected{% endif %}>{{ opt }}</option>
-            {% endfor %}
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label for="availability">Availability *</label>
-          <select id="availability" name="availability" required>
-            {% set av = form_data.availability if form_data else '' %}
-            <option value="" disabled {% if not av %}selected{% endif %}>Select</option>
-            <option value="available" {% if av == 'available' %}selected{% endif %}>Available</option>
-            <option value="under construction" {% if av == 'under construction' %}selected{% endif %}>Under Construction</option>
-            <option value="sold" {% if av == 'sold' %}selected{% endif %}>Sold</option>
-          </select>
-        </div>
-
-        <div class="form-group full">
-          <label>Property Images * <span style="color:var(--muted);text-transform:none;font-weight:400">(first image = primary listing image)</span></label>
-          <div class="file-zone" id="file-zone" onclick="document.getElementById('images').click()">
-            <div style="font-size:28px">📷</div>
-            <div style="font-weight:600;margin-top:4px">Click to upload images</div>
-            <div class="hint">JPEG, PNG, WEBP — up to 10 files</div>
-            <input type="file" id="images" name="images" accept="image/*" multiple required>
+    <!-- ── Property ID row ──────────────────────────────── -->
+    <div class="section">
+      <div class="section-body">
+        <div class="prop-id-row">
+          <div class="form-group">
+            <label for="property_id">Property ID <span class="req">*</span></label>
+            <input type="text" id="property_id" name="property_id" required
+                   placeholder="e.g. EF-BLR-001"
+                   value="{{ form_data.property_id if form_data else '' }}">
           </div>
-          <div id="file-preview"></div>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="generateId()">⚡ Auto-generate</button>
         </div>
 
-      </div><!-- /form-grid -->
-
-      <div style="margin-top:22px">
-        <button type="submit" class="btn btn-primary btn-block" id="submit-btn">
-          <span class="spinner" id="spinner"></span>
-          <span id="submit-label">🚀 Submit to Meta Catalog</span>
-        </button>
+        <!-- ── Smart Paste ──────────────────────────────────── -->
+        <div>
+          <label for="smart_paste">💡 Smart Paste <span style="text-transform:none;font-weight:400;font-size:11px;color:var(--muted)">— paste any raw property description and fields will be auto-filled</span></label>
+          <div class="smart-paste-wrap" style="margin-top:5px">
+            <textarea id="smart_paste" placeholder="Paste a WhatsApp forward, broker listing, or any unstructured property text here and click Map Fields…"></textarea>
+          </div>
+          <div class="paste-actions">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="runSmartMapping()">⚡ Map Fields</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="clearMappedValues()">✕ Clear Mapped</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="runSmartMapping()">↺ Re-run Mapping</button>
+          </div>
+          <div class="mapping-result" id="mapping-result"></div>
+        </div>
       </div>
+    </div>
 
-    </form>
-  </div><!-- /card -->
+    <!-- ── SECTION A: Property Details ──────────────────── -->
+    <div class="section">
+      <div class="section-head">
+        <div class="section-badge">A</div>
+        <h2>Property Details</h2>
+      </div>
+      <div class="section-body">
+        <div class="form-grid">
+
+          <div class="form-group fg-half">
+            <label for="title">Title <span class="req">*</span></label>
+            <input type="text" id="title" name="title" required
+                   placeholder="e.g. 2 BHK Apartment • Sarjapur Road, Bengaluru"
+                   value="{{ form_data.title if form_data else '' }}">
+          </div>
+
+          <div class="form-group fg-third">
+            <label for="property_type">Property Type <span class="req">*</span></label>
+            <select id="property_type" name="property_type" required>
+              {% set sel = form_data.property_type if form_data else '' %}
+              <option value="" disabled {% if not sel %}selected{% endif %}>Select</option>
+              {% for t in ['Apartment','Villa','Independent House','Plot','Commercial','Row House','Penthouse','Studio','Farm House'] %}
+              <option value="{{ t }}" {% if sel == t %}selected{% endif %}>{{ t }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="form-group fg-third">
+            <label for="listing_type">Listing Type</label>
+            <select id="listing_type" name="listing_type">
+              <option value="">Select</option>
+              <option value="Rent">For Rent</option>
+              <option value="Sale">For Sale</option>
+              <option value="Lease">Lease</option>
+              <option value="PG">PG / Hostel</option>
+            </select>
+          </div>
+
+          <div class="form-group fg-third">
+            <label for="price">Price / Rent <span class="req">*</span></label>
+            <input type="text" id="price" name="price" required
+                   placeholder="e.g. 25000 or 4500000"
+                   value="{{ form_data.price if form_data else '' }}">
+          </div>
+
+          <div class="form-group fg-third">
+            <label for="currency">Currency</label>
+            <select id="currency" name="currency">
+              <option value="INR">INR ₹</option>
+              <option value="USD">USD $</option>
+            </select>
+          </div>
+
+          <div class="form-group fg-third">
+            <label for="deposit">Deposit / Security</label>
+            <input type="text" id="deposit" name="deposit" placeholder="e.g. 75000">
+          </div>
+
+          <div class="form-group fg-third">
+            <label for="maintenance">Maintenance</label>
+            <input type="text" id="maintenance" name="maintenance" placeholder="e.g. 3000 / month">
+          </div>
+
+          <div class="form-group fg-third">
+            <label for="bhk">BHK / Config <span class="req">*</span></label>
+            <select id="bhk" name="bhk" required>
+              {% set b = form_data.bhk if form_data else '' %}
+              <option value="" disabled {% if not b %}selected{% endif %}>Select</option>
+              {% for opt in ['1 RK','1 BHK','2 BHK','3 BHK','4 BHK','4+ BHK','Studio','Plot','Commercial'] %}
+              <option value="{{ opt }}" {% if b == opt %}selected{% endif %}>{{ opt }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="form-group fg-third">
+            <label for="bedrooms">Bedrooms</label>
+            <input type="number" id="bedrooms" name="bedrooms" min="0" placeholder="e.g. 2">
+          </div>
+
+          <div class="form-group fg-third">
+            <label for="bathrooms">Bathrooms</label>
+            <input type="number" id="bathrooms" name="bathrooms" min="0" placeholder="e.g. 2">
+          </div>
+
+          <div class="form-group fg-third">
+            <label for="furnishing">Furnishing</label>
+            <select id="furnishing" name="furnishing">
+              <option value="">Select</option>
+              <option value="Fully Furnished">Fully Furnished</option>
+              <option value="Semi Furnished">Semi Furnished</option>
+              <option value="Unfurnished">Unfurnished</option>
+            </select>
+          </div>
+
+          <div class="form-group fg-third">
+            <label for="area_super">Super Built-up (sq ft)</label>
+            <input type="text" id="area_super" name="area_super" placeholder="e.g. 1200">
+          </div>
+
+          <div class="form-group fg-third">
+            <label for="area_carpet">Carpet Area (sq ft)</label>
+            <input type="text" id="area_carpet" name="area_carpet" placeholder="e.g. 950">
+          </div>
+
+          <div class="form-group fg-third">
+            <label for="facing">Facing</label>
+            <select id="facing" name="facing">
+              <option value="">Select</option>
+              {% for f in ['East','West','North','South','North-East','North-West','South-East','South-West'] %}
+              <option value="{{ f }}">{{ f }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="form-group fg-third">
+            <label for="floor">Floor</label>
+            <input type="text" id="floor" name="floor" placeholder="e.g. 3">
+          </div>
+
+          <div class="form-group fg-third">
+            <label for="total_floors">Total Floors</label>
+            <input type="text" id="total_floors" name="total_floors" placeholder="e.g. 12">
+          </div>
+
+          <div class="form-group fg-third">
+            <label for="parking">Parking</label>
+            <select id="parking" name="parking">
+              <option value="">Select</option>
+              <option value="1 Covered">1 Covered</option>
+              <option value="2 Covered">2 Covered</option>
+              <option value="1 Open">1 Open</option>
+              <option value="None">None</option>
+            </select>
+          </div>
+
+          <div class="form-group fg-third">
+            <label for="availability">Availability <span class="req">*</span></label>
+            <select id="availability" name="availability" required>
+              {% set av = form_data.availability if form_data else '' %}
+              <option value="" disabled {% if not av %}selected{% endif %}>Select</option>
+              <option value="available" {% if av == 'available' %}selected{% endif %}>Available</option>
+              <option value="under construction" {% if av == 'under construction' %}selected{% endif %}>Under Construction</option>
+              <option value="ready to move" {% if av == 'ready to move' %}selected{% endif %}>Ready to Move</option>
+              <option value="sold" {% if av == 'sold' %}selected{% endif %}>Sold</option>
+            </select>
+          </div>
+
+          <div class="form-group fg-full">
+            <label for="description">Description <span class="req">*</span></label>
+            <textarea id="description" name="description" required style="min-height:100px"
+                      placeholder="Describe the property — layout, highlights, nearby facilities…">{{ form_data.description if form_data else '' }}</textarea>
+          </div>
+
+          <div class="form-group fg-full">
+            <label>Amenities <span style="text-transform:none;font-weight:400;color:var(--muted)">(type and press Enter or comma)</span></label>
+            <div class="chip-input-wrap" id="amenity-wrap" onclick="document.getElementById('amenity-input').focus()">
+              <input type="text" id="amenity-input" class="chip-input" placeholder="Gym, Swimming Pool, Lift…">
+            </div>
+            <input type="hidden" name="amenities" id="amenities-hidden">
+          </div>
+
+          <div class="form-group fg-half">
+            <label for="broker_name">Broker / Owner Name</label>
+            <input type="text" id="broker_name" name="broker_name" placeholder="e.g. Suresh Kumar">
+          </div>
+
+          <div class="form-group fg-half">
+            <label for="phone">Phone / WhatsApp</label>
+            <input type="tel" id="phone" name="phone" placeholder="e.g. 9876543210">
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SECTION B: Location ───────────────────────────── -->
+    <div class="section">
+      <div class="section-head">
+        <div class="section-badge">B</div>
+        <h2>Location</h2>
+      </div>
+      <div class="section-body">
+        <div class="form-grid">
+
+          <div class="form-group fg-half">
+            <label for="building_name">Building / Project Name</label>
+            <input type="text" id="building_name" name="building_name" placeholder="e.g. Prestige Shantiniketan">
+          </div>
+
+          <div class="form-group fg-half">
+            <label for="flat_number">House / Flat Number</label>
+            <input type="text" id="flat_number" name="flat_number" placeholder="e.g. 304, Block B">
+          </div>
+
+          <div class="form-group fg-full">
+            <label for="street">Street / Road</label>
+            <input type="text" id="street" name="street" placeholder="e.g. 12th Cross, Indiranagar">
+          </div>
+
+          <div class="form-group fg-half">
+            <label for="landmark">Landmark</label>
+            <input type="text" id="landmark" name="landmark" placeholder="e.g. Near Forum Mall">
+          </div>
+
+          <div class="form-group fg-half">
+            <label for="locality">Locality / Area <span class="req">*</span></label>
+            <input type="text" id="locality" name="locality" required
+                   placeholder="e.g. Sarjapur Road"
+                   value="{{ form_data.locality if form_data else '' }}">
+          </div>
+
+          <div class="form-group fg-third">
+            <label for="city">City <span class="req">*</span></label>
+            <input type="text" id="city" name="city" required
+                   placeholder="e.g. Bengaluru"
+                   value="{{ form_data.city if form_data else '' }}">
+          </div>
+
+          <div class="form-group fg-third">
+            <label for="state">State</label>
+            <input type="text" id="state" name="state" placeholder="e.g. Karnataka">
+          </div>
+
+          <div class="form-group fg-third">
+            <label for="pincode">Pincode</label>
+            <input type="text" id="pincode" name="pincode" placeholder="e.g. 560103" maxlength="6">
+          </div>
+
+          <div class="form-group fg-full">
+            <label for="maps_link">Google Maps Link</label>
+            <input type="url" id="maps_link" name="maps_link" placeholder="https://maps.google.com/…">
+          </div>
+
+          <div class="form-group fg-half">
+            <label for="latitude">Latitude</label>
+            <input type="text" id="latitude" name="latitude" placeholder="e.g. 12.9716">
+          </div>
+
+          <div class="form-group fg-half">
+            <label for="longitude">Longitude</label>
+            <input type="text" id="longitude" name="longitude" placeholder="e.g. 77.5946">
+          </div>
+
+          <div class="form-group fg-full">
+            <label>Address Preview</label>
+            <div class="address-preview" id="address-preview">—</div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SECTION C: Images ─────────────────────────────── -->
+    <div class="section">
+      <div class="section-head">
+        <div class="section-badge">C</div>
+        <h2>Property Images</h2>
+        <span class="optional">Drag to reorder · First image = cover by default</span>
+      </div>
+      <div class="section-body">
+
+        <!-- Drop zone -->
+        <div class="drop-zone" id="drop-zone">
+          <div class="dz-icon">📷</div>
+          <div class="dz-title">Click to upload or drag &amp; drop images here</div>
+          <div class="dz-hint">JPEG, PNG, WEBP — up to 20 files</div>
+          <input type="file" id="file-input" accept="image/*" multiple>
+        </div>
+
+        <!-- URL paste -->
+        <div class="url-paste-row">
+          <input type="url" id="url-input" placeholder="Paste an image URL and press Enter…">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="addUrlImage()">Add URL</button>
+        </div>
+
+        <!-- Gallery grid -->
+        <div class="gallery-grid" id="gallery-grid"></div>
+
+        <!-- Hidden file input for submission -->
+        <input type="file" id="submit-file-input" name="images" accept="image/*" multiple style="display:none">
+
+      </div>
+    </div>
+
+    <!-- ── SECTION D: Cover Image ────────────────────────── -->
+    <div class="section">
+      <div class="section-head">
+        <div class="section-badge">D</div>
+        <h2>Cover Image</h2>
+        <span class="optional">Used as primary listing image in Meta catalog</span>
+      </div>
+      <div class="section-body">
+        <div class="cover-preview-wrap">
+          <div id="cover-empty" class="cover-empty">No images added yet</div>
+          <img id="cover-preview-img" class="cover-preview-img" style="display:none" src="" alt="Cover image">
+          <div>
+            <div class="cover-info" id="cover-info">Add images in Section C, then click "Set as cover" on any image.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Action Bar ────────────────────────────────────── -->
+    <div class="action-bar">
+      <button type="submit" class="btn btn-primary" id="submit-btn">
+        <span class="spinner" id="spinner"></span>
+        <span id="submit-label">🚀 Create / Update Property</span>
+      </button>
+      <button type="button" class="btn btn-secondary" onclick="saveDraft()">💾 Save Draft</button>
+      <button type="button" class="btn btn-secondary" onclick="clearMappedValues()">✕ Clear Mapped</button>
+      <button type="button" class="btn btn-secondary" onclick="runSmartMapping()">↺ Re-run Mapping</button>
+    </div>
+
+  </form>
 </div>
 
 <footer>EasyFind Property Solutions &copy; 2025 — Internal Admin Tool</footer>
 
-<script>
-const input = document.getElementById('images');
-const preview = document.getElementById('file-preview');
-const form = document.getElementById('prop-form');
-const spinner = document.getElementById('spinner');
-const submitLabel = document.getElementById('submit-label');
+<div class="toast" id="toast"></div>
 
-input.addEventListener('change', () => {
-  preview.innerHTML = '';
-  Array.from(input.files).forEach(file => {
-    const img = document.createElement('img');
-    img.src = URL.createObjectURL(file);
-    img.onload = () => URL.revokeObjectURL(img.src);
-    preview.appendChild(img);
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+const gallery = [];          // {type:'file'|'url', file?:File, url:string, id:string}
+let coverIndex = 0;          // index into gallery array
+const mappedFields = new Set();
+const editedFields = new Set();
+let dragSrcIdx = null;
+
+// ── Utilities ────────────────────────────────────────────────────────────────
+function uid() { return Math.random().toString(36).slice(2, 9); }
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+function generateId() {
+  const city = (document.getElementById('city').value || 'XX').slice(0, 3).toUpperCase();
+  const ts = Date.now().toString().slice(-5);
+  document.getElementById('property_id').value = `EF-${city}-${ts}`;
+}
+
+// ── Track manual edits ────────────────────────────────────────────────────────
+document.querySelectorAll('input, select, textarea').forEach(el => {
+  if (!el.name || el.type === 'hidden' || el.id === 'smart_paste') return;
+  el.addEventListener('input', () => {
+    if (!mappedFields.has(el.id)) return; // only matters if it was auto-filled
+    editedFields.add(el.id);
+    el.classList.remove('auto-filled');
   });
 });
 
-form.addEventListener('submit', () => {
-  spinner.style.display = 'block';
-  submitLabel.textContent = 'Uploading & submitting…';
-  document.getElementById('submit-btn').disabled = true;
+// ── Address preview ───────────────────────────────────────────────────────────
+function buildAddressPreview() {
+  const parts = [
+    document.getElementById('flat_number').value,
+    document.getElementById('building_name').value,
+    document.getElementById('street').value,
+    document.getElementById('landmark').value,
+    document.getElementById('locality').value,
+    document.getElementById('city').value,
+    document.getElementById('state').value,
+    document.getElementById('pincode').value,
+  ].filter(Boolean);
+  const preview = document.getElementById('address-preview');
+  preview.textContent = parts.length ? parts.join(', ') : '—';
+}
+['flat_number','building_name','street','landmark','locality','city','state','pincode'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', buildAddressPreview);
 });
+
+// ── Amenity chips ─────────────────────────────────────────────────────────────
+const amenityList = [];
+
+function addAmenity(val) {
+  val = val.trim();
+  if (!val || amenityList.includes(val)) return;
+  amenityList.push(val);
+  renderChips();
+  syncAmenities();
+}
+
+function removeAmenity(val) {
+  const idx = amenityList.indexOf(val);
+  if (idx >= 0) amenityList.splice(idx, 1);
+  renderChips();
+  syncAmenities();
+}
+
+function renderChips() {
+  const wrap = document.getElementById('amenity-wrap');
+  // Remove old chips
+  wrap.querySelectorAll('.chip').forEach(c => c.remove());
+  const input = document.getElementById('amenity-input');
+  amenityList.forEach(val => {
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.innerHTML = `${val} <button type="button" onclick="removeAmenity('${val.replace(/'/g,"\\'")}')">×</button>`;
+    wrap.insertBefore(chip, input);
+  });
+}
+
+function syncAmenities() {
+  document.getElementById('amenities-hidden').value = amenityList.join(',');
+}
+
+document.getElementById('amenity-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ',') {
+    e.preventDefault();
+    addAmenity(e.target.value);
+    e.target.value = '';
+  }
+});
+document.getElementById('amenity-input').addEventListener('blur', e => {
+  if (e.target.value) { addAmenity(e.target.value); e.target.value = ''; }
+});
+
+// ── Image Gallery ─────────────────────────────────────────────────────────────
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+const galleryGrid = document.getElementById('gallery-grid');
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('drag-over');
+  Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/')).forEach(addFileImage);
+});
+
+fileInput.addEventListener('change', () => {
+  Array.from(fileInput.files).forEach(addFileImage);
+  fileInput.value = '';
+});
+
+function addFileImage(file) {
+  const id = uid();
+  const url = URL.createObjectURL(file);
+  gallery.push({ type: 'file', file, url, id });
+  renderGallery();
+}
+
+function addUrlImage() {
+  const input = document.getElementById('url-input');
+  const url = input.value.trim();
+  if (!url) return;
+  if (!url.match(/^https?:\/\//i)) { showToast('Please enter a valid URL starting with http://'); return; }
+  gallery.push({ type: 'url', url, id: uid() });
+  input.value = '';
+  renderGallery();
+}
+
+document.getElementById('url-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); addUrlImage(); }
+});
+
+function removeImage(id) {
+  const idx = gallery.findIndex(g => g.id === id);
+  if (idx < 0) return;
+  if (gallery[idx].type === 'file') URL.revokeObjectURL(gallery[idx].url);
+  gallery.splice(idx, 1);
+  if (coverIndex >= gallery.length) coverIndex = Math.max(0, gallery.length - 1);
+  renderGallery();
+}
+
+function setCover(id) {
+  const idx = gallery.findIndex(g => g.id === id);
+  if (idx >= 0) coverIndex = idx;
+  renderGallery();
+}
+
+function renderGallery() {
+  galleryGrid.innerHTML = '';
+  gallery.forEach((item, idx) => {
+    const card = document.createElement('div');
+    card.className = 'img-card' + (idx === coverIndex ? ' is-cover' : '');
+    card.dataset.idx = idx;
+    card.draggable = true;
+
+    const img = document.createElement('img');
+    img.src = item.url;
+    img.alt = 'Property image';
+
+    const actions = document.createElement('div');
+    actions.className = 'img-card-actions';
+    actions.innerHTML = `
+      <button type="button" class="set-cover-btn" onclick="setCover('${item.id}')">★ Cover</button>
+      <button type="button" class="remove-btn" onclick="removeImage('${item.id}')">✕</button>
+    `;
+
+    if (idx === coverIndex) {
+      const lbl = document.createElement('div');
+      lbl.className = 'cover-label'; lbl.textContent = 'Cover';
+      card.appendChild(lbl);
+    }
+
+    card.appendChild(img);
+    card.appendChild(actions);
+    galleryGrid.appendChild(card);
+
+    // Drag-to-reorder
+    card.addEventListener('dragstart', e => { dragSrcIdx = idx; card.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
+    card.addEventListener('dragend', () => card.classList.remove('dragging'));
+    card.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; });
+    card.addEventListener('drop', e => {
+      e.preventDefault();
+      if (dragSrcIdx === null || dragSrcIdx === idx) return;
+      const moved = gallery.splice(dragSrcIdx, 1)[0];
+      gallery.splice(idx, 0, moved);
+      if (coverIndex === dragSrcIdx) coverIndex = idx;
+      else if (dragSrcIdx < coverIndex && idx >= coverIndex) coverIndex--;
+      else if (dragSrcIdx > coverIndex && idx <= coverIndex) coverIndex++;
+      dragSrcIdx = null;
+      renderGallery();
+    });
+  });
+
+  updateCoverPreview();
+  document.getElementById('cover_image_index_field').value = coverIndex;
+}
+
+function updateCoverPreview() {
+  const img = document.getElementById('cover-preview-img');
+  const empty = document.getElementById('cover-empty');
+  const info = document.getElementById('cover-info');
+  if (gallery.length === 0) {
+    img.style.display = 'none'; empty.style.display = 'flex';
+    info.textContent = 'Add images in Section C, then click "★ Cover" on any image.';
+  } else {
+    const item = gallery[coverIndex] || gallery[0];
+    img.src = item.url; img.style.display = 'block'; empty.style.display = 'none';
+    info.innerHTML = `<strong>Image ${coverIndex + 1} of ${gallery.length}</strong> is selected as cover.<br>Click "★ Cover" on any image in Section C to change.`;
+  }
+}
+
+// ── Smart Paste ───────────────────────────────────────────────────────────────
+function runSmartMapping() {
+  const raw = document.getElementById('smart_paste').value.trim();
+  if (!raw) { showToast('Paste some property text first.'); return; }
+
+  const extracted = {};
+  const uncertain = [];
+
+  // Listing type
+  if (/\b(rent|rental|monthly|per month|pm\b)/i.test(raw)) extracted.listing_type = 'Rent';
+  else if (/\b(sale|for sale|asking|crore|cr\b|lakh|lakhs)\b/i.test(raw)) extracted.listing_type = 'Sale';
+
+  // BHK
+  const bhkM = raw.match(/(\d)\s*(?:bhk|bedroom)/i);
+  if (bhkM) {
+    const n = bhkM[1];
+    const opts = ['1 RK','1 BHK','2 BHK','3 BHK','4 BHK','4+ BHK'];
+    extracted.bhk = opts.find(o => o.startsWith(n + ' BHK')) || (n + ' BHK');
+    extracted.bedrooms = n;
+  }
+
+  // Price
+  const croreM = raw.match(/(?:₹\s*)?(\d+(?:\.\d+)?)\s*(?:cr|crore)/i);
+  const lakhM  = raw.match(/(?:₹\s*)?(\d+(?:\.\d+)?)\s*(?:l|lakh|lakhs)/i);
+  const rentM  = raw.match(/(?:₹\s*|rs\.?\s*)(\d[\d,]+)\s*(?:\/\s*(?:month|mon|mo|pm))?/i);
+  if (croreM)      extracted.price = String(Math.round(parseFloat(croreM[1]) * 1e7));
+  else if (lakhM)  extracted.price = String(Math.round(parseFloat(lakhM[1]) * 1e5));
+  else if (rentM)  extracted.price = rentM[1].replace(/,/g, '');
+
+  // Deposit
+  const depositM = raw.match(/deposit[:\s₹]*([0-9,]+)/i);
+  if (depositM) extracted.deposit = depositM[1].replace(/,/g,'');
+
+  // Maintenance
+  const maintM = raw.match(/maintenance[:\s₹]*([0-9,]+)/i);
+  if (maintM) extracted.maintenance = maintM[1].replace(/,/g,'');
+
+  // Furnishing
+  if (/fully\s*furnished/i.test(raw))      extracted.furnishing = 'Fully Furnished';
+  else if (/semi\s*furnished/i.test(raw))  extracted.furnishing = 'Semi Furnished';
+  else if (/unfurnished/i.test(raw))       extracted.furnishing = 'Unfurnished';
+
+  // Area
+  const areaM = raw.match(/(\d+(?:\.\d+)?)\s*(?:sqft|sq\.?\s*ft|square\s*feet)/i);
+  if (areaM) extracted.area_super = areaM[1];
+
+  // Floor
+  const floorM = raw.match(/(\d+)(?:st|nd|rd|th)?\s*floor/i);
+  if (floorM) extracted.floor = floorM[1];
+
+  // Bathrooms
+  const bathM = raw.match(/(\d)\s*(?:bath|bathroom|washroom)/i);
+  if (bathM) extracted.bathrooms = bathM[1];
+
+  // Parking
+  if (/covered\s*parking/i.test(raw))  extracted.parking = '1 Covered';
+  else if (/\bparking\b/i.test(raw))   { extracted.parking = '1 Open'; uncertain.push('parking'); }
+
+  // Availability
+  if (/ready\s*to\s*move/i.test(raw))          extracted.availability = 'ready to move';
+  else if (/under\s*construction/i.test(raw))  extracted.availability = 'under construction';
+  else if (/\bavailable\b/i.test(raw))          extracted.availability = 'available';
+  else if (/\bsold\b/i.test(raw))               extracted.availability = 'sold';
+
+  // Facing
+  const facingM = raw.match(/\b(east|west|north|south|north-?east|north-?west|south-?east|south-?west)\b\s*facing/i);
+  if (facingM) {
+    const f = facingM[1].replace(/-/g,'').replace(/(\w)(\w+)/g, (_, a, b) => a.toUpperCase() + b.toLowerCase());
+    extracted.facing = f;
+  }
+
+  // Google Maps URL
+  const mapsM = raw.match(/https?:\/\/(?:maps\.google\.com|goo\.gl\/maps|maps\.app\.goo\.gl|www\.google\.com\/maps)[^\s]*/i);
+  if (mapsM) extracted.maps_link = mapsM[0];
+
+  // Phone
+  const phoneM = raw.match(/(?:\+91[\s-]?)?[6-9]\d{9}/);
+  if (phoneM) extracted.phone = phoneM[0].replace(/[\s-]/g,'');
+
+  // City
+  const cities = ['bengaluru','bangalore','mumbai','delhi','hyderabad','chennai','pune','kolkata','ahmedabad','surat','jaipur','noida','gurgaon','gurugram'];
+  const cityFound = cities.find(c => raw.toLowerCase().includes(c));
+  if (cityFound) {
+    const map = {'bangalore':'Bengaluru','gurugram':'Gurgaon'};
+    extracted.city = map[cityFound] || (cityFound.charAt(0).toUpperCase() + cityFound.slice(1));
+  }
+
+  // Landmark (look for "near <place>")
+  const nearM = raw.match(/near\s+([A-Z][a-zA-Z\s]{3,30}?)(?:,|\.|\n|$)/);
+  if (nearM) extracted.landmark = nearM[1].trim();
+
+  // Image URLs in pasted text
+  const imgUrls = raw.match(/https?:\/\/[^\s]+\.(?:jpg|jpeg|png|webp)/gi);
+  if (imgUrls) {
+    imgUrls.forEach(url => {
+      if (!gallery.find(g => g.url === url)) gallery.push({ type: 'url', url, id: uid() });
+    });
+    renderGallery();
+  }
+
+  // Amenities
+  const amenityKws = ['gym','swimming pool','pool','lift','elevator','security','cctv','club house','clubhouse','garden','power backup','intercom','children play area','jogging track','tennis court','basketball court','covered parking'];
+  amenityKws.forEach(a => {
+    if (raw.toLowerCase().includes(a) && !amenityList.includes(a.replace(/\b\w/g, c => c.toUpperCase()))) {
+      addAmenity(a.replace(/\b\w/g, c => c.toUpperCase()));
+    }
+  });
+
+  // Auto-generate title if we have enough info
+  if (!document.getElementById('title').value && extracted.bhk && (extracted.city || document.getElementById('city').value)) {
+    const pt = document.getElementById('property_type').value || 'Property';
+    const loc = document.getElementById('locality').value || extracted.locality || '';
+    const cty = extracted.city || document.getElementById('city').value || '';
+    if (loc || cty) {
+      extracted.title = `${extracted.bhk} ${pt}${loc ? ' • ' + loc : ''}${cty ? ', ' + cty : ''}`;
+    }
+  }
+
+  // Apply to form
+  const fieldMap = {
+    listing_type: 'listing_type', bhk: 'bhk', bedrooms: 'bedrooms', bathrooms: 'bathrooms',
+    price: 'price', deposit: 'deposit', maintenance: 'maintenance',
+    furnishing: 'furnishing', area_super: 'area_super', floor: 'floor',
+    parking: 'parking', availability: 'availability', facing: 'facing',
+    phone: 'phone', city: 'city', landmark: 'landmark', maps_link: 'maps_link',
+    title: 'title',
+  };
+
+  const applied = [];
+  const skipped = [];
+
+  Object.entries(extracted).forEach(([key, val]) => {
+    const elId = fieldMap[key] || key;
+    const el = document.getElementById(elId);
+    if (!el) return;
+    if (editedFields.has(elId)) { skipped.push(key); return; }
+    el.value = val;
+    el.classList.add('auto-filled');
+    mappedFields.add(elId);
+    applied.push({ key, uncertain: uncertain.includes(key) });
+  });
+
+  buildAddressPreview();
+  showMappingResult(applied, skipped);
+  if (applied.length) showToast(`✓ Mapped ${applied.length} field${applied.length > 1 ? 's' : ''}`);
+  else showToast('Nothing new to map from this text.');
+}
+
+function showMappingResult(applied, skipped) {
+  const el = document.getElementById('mapping-result');
+  if (!applied.length && !skipped.length) { el.className = 'mapping-result'; return; }
+  let html = '';
+  applied.forEach(({ key, uncertain: u }) => {
+    html += `<span class="map-chip${u ? ' uncertain' : ''}">${u ? '⚠ ' : '✓ '}${key.replace(/_/g,' ')}</span>`;
+  });
+  skipped.forEach(key => {
+    html += `<span class="map-chip skipped">↷ ${key.replace(/_/g,' ')} (kept)</span>`;
+  });
+  el.innerHTML = `<div style="margin-bottom:4px;font-weight:600;color:var(--muted)">Mapping result:</div>` + html +
+    `<div style="margin-top:6px;font-size:11px;color:var(--muted)">
+      🟢 mapped &nbsp; 🟡 uncertain (check manually) &nbsp; 🟣 skipped (you edited this field)
+    </div>`;
+  el.className = 'mapping-result show';
+}
+
+function clearMappedValues() {
+  mappedFields.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.value = ''; el.classList.remove('auto-filled'); }
+  });
+  mappedFields.clear();
+  document.getElementById('mapping-result').className = 'mapping-result';
+  showToast('Cleared all auto-mapped values.');
+}
+
+// ── Draft save / restore (sessionStorage) ────────────────────────────────────
+const DRAFT_KEY = 'ef_draft';
+const DRAFT_FIELDS = ['property_id','title','property_type','listing_type','price','currency',
+  'deposit','maintenance','bhk','bedrooms','bathrooms','furnishing','area_super','area_carpet',
+  'facing','floor','total_floors','parking','availability','description',
+  'broker_name','phone','building_name','flat_number','street','landmark',
+  'locality','city','state','pincode','maps_link','latitude','longitude'];
+
+function saveDraft() {
+  const data = {};
+  DRAFT_FIELDS.forEach(id => { const el = document.getElementById(id); if (el) data[id] = el.value; });
+  data._amenities = amenityList.slice();
+  sessionStorage.setItem(DRAFT_KEY, JSON.stringify(data));
+  document.getElementById('draft-indicator').style.display = 'inline';
+  showToast('💾 Draft saved');
+}
+
+function restoreDraft() {
+  const raw = sessionStorage.getItem(DRAFT_KEY);
+  if (!raw) return;
+  try {
+    const data = JSON.parse(raw);
+    DRAFT_FIELDS.forEach(id => {
+      const el = document.getElementById(id);
+      if (el && data[id]) el.value = data[id];
+    });
+    if (data._amenities) {
+      data._amenities.forEach(a => addAmenity(a));
+    }
+    document.getElementById('draft-indicator').style.display = 'inline';
+    buildAddressPreview();
+    showToast('Draft restored');
+  } catch(e) {}
+}
+
+// Auto-save every 30 seconds
+setInterval(() => {
+  const hasContent = DRAFT_FIELDS.some(id => { const el = document.getElementById(id); return el && el.value; });
+  if (hasContent) {
+    const data = {};
+    DRAFT_FIELDS.forEach(id => { const el = document.getElementById(id); if (el) data[id] = el.value; });
+    data._amenities = amenityList.slice();
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(data));
+    document.getElementById('draft-indicator').style.display = 'inline';
+  }
+}, 30000);
+
+// ── Form submit: wire up hidden file input ───────────────────────────────────
+document.getElementById('prop-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+
+  // Sync pasted URLs
+  const pastedUrls = gallery.filter(g => g.type === 'url').map(g => g.url);
+  document.getElementById('pasted_image_urls_field').value = pastedUrls.join('\n');
+  document.getElementById('cover_image_index_field').value = coverIndex;
+
+  // Build a DataTransfer with the files in current gallery order
+  const dt = new DataTransfer();
+  gallery.filter(g => g.type === 'file').forEach(g => dt.items.add(g.file));
+  const submitInput = document.getElementById('submit-file-input');
+  submitInput.files = dt.files;
+
+  // Show spinner
+  document.getElementById('spinner').style.display = 'inline-block';
+  document.getElementById('submit-label').textContent = 'Uploading & publishing…';
+  document.getElementById('submit-btn').disabled = true;
+
+  // Clear draft after submit
+  sessionStorage.removeItem(DRAFT_KEY);
+
+  this.submit();
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+restoreDraft();
+buildAddressPreview();
 </script>
 </body>
 </html>

@@ -66,7 +66,6 @@ GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "")
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
-    """Redirect root to admin property form (with same auth)."""
     token = request.query_params.get("token", "")
     url = f"/admin/property?token={token}" if token else "/admin/property"
     return HTMLResponse(content=f'<meta http-equiv="refresh" content="0; url={url}">', status_code=302)
@@ -85,6 +84,7 @@ async def admin_property_form(request: Request, _: None = Depends(verify_admin))
 async def admin_property_submit(
     request: Request,
     _: None = Depends(verify_admin),
+    # ── Core fields (required) ────────────────────────────────────────────────
     property_id: str = Form(...),
     title: str = Form(...),
     description: str = Form(...),
@@ -95,36 +95,68 @@ async def admin_property_submit(
     bhk: str = Form(...),
     property_type: str = Form(...),
     availability: str = Form(...),
-    images: List[UploadFile] = File(...),
+    # ── Extended property fields (optional) ──────────────────────────────────
+    listing_type: str = Form(default=""),
+    deposit: str = Form(default=""),
+    maintenance: str = Form(default=""),
+    bedrooms: str = Form(default=""),
+    bathrooms: str = Form(default=""),
+    furnishing: str = Form(default=""),
+    area_super: str = Form(default=""),
+    area_carpet: str = Form(default=""),
+    facing: str = Form(default=""),
+    floor: str = Form(default=""),
+    total_floors: str = Form(default=""),
+    parking: str = Form(default=""),
+    amenities: str = Form(default=""),
+    broker_name: str = Form(default=""),
+    phone: str = Form(default=""),
+    # ── Location fields (optional) ────────────────────────────────────────────
+    building_name: str = Form(default=""),
+    flat_number: str = Form(default=""),
+    street: str = Form(default=""),
+    landmark: str = Form(default=""),
+    state: str = Form(default=""),
+    pincode: str = Form(default=""),
+    maps_link_field: str = Form(default="", alias="maps_link"),
+    latitude: str = Form(default=""),
+    longitude: str = Form(default=""),
+    # ── Image fields ──────────────────────────────────────────────────────────
+    pasted_image_urls: str = Form(default=""),
+    cover_image_index: str = Form(default="0"),
+    images: List[UploadFile] = File(default=[]),
 ):
     token = request.query_params.get("token", "")
     errors = []
-    result_ctx = {}
 
-    # ── 1. Upload images to Cloudinary ────────────────────────────────────────
-    image_urls: List[str] = []
+    # ── 1. Upload file images to Cloudinary ───────────────────────────────────
+    cloudinary_urls: List[str] = []
     if MOCK_MODE:
-        image_urls = [
+        cloudinary_urls = [
             f"https://res.cloudinary.com/dcvwsclyc/image/upload/v1/mock_{property_id}_0.jpg"
         ]
-        logger.info("[MOCK] Skipping Cloudinary upload, using mock URL.")
+        logger.info("[MOCK] Skipping Cloudinary upload.")
     else:
         valid_images = [f for f in images if f.filename]
-        if not valid_images:
-            errors.append("At least one image is required.")
-        else:
+        if valid_images:
             try:
-                image_urls = await upload_images(valid_images, property_id)
+                cloudinary_urls = await upload_images(valid_images, property_id)
             except Exception as exc:
                 errors.append(f"Image upload failed: {exc}")
+
+    # ── 2. Combine with pasted URLs ───────────────────────────────────────────
+    pasted_urls = [u.strip() for u in pasted_image_urls.splitlines() if u.strip()]
+    all_image_urls = cloudinary_urls + pasted_urls
+
+    # Validate: at least one image
+    if not all_image_urls and not errors:
+        errors.append("At least one image is required.")
 
     if errors:
         return templates.TemplateResponse(
             "admin_property.html",
             {
-                "request": request,
-                "token": token,
-                "mock_mode": MOCK_MODE,
+                "request": request, "token": token, "mock_mode": MOCK_MODE,
                 "errors": errors,
                 "form_data": {
                     "property_id": property_id, "title": title,
@@ -137,8 +169,22 @@ async def admin_property_submit(
             status_code=400,
         )
 
-    image_link = image_urls[0] if image_urls else ""
+    # ── 3. Determine cover image ───────────────────────────────────────────────
+    try:
+        cover_idx = int(cover_image_index)
+        if cover_idx < 0 or cover_idx >= len(all_image_urls):
+            cover_idx = 0
+    except (ValueError, TypeError):
+        cover_idx = 0
 
+    # Put cover first
+    if cover_idx != 0 and all_image_urls:
+        cover = all_image_urls.pop(cover_idx)
+        all_image_urls.insert(0, cover)
+
+    image_link = all_image_urls[0] if all_image_urls else ""
+
+    # ── Build property_data dict ──────────────────────────────────────────────
     property_data = {
         "property_id": property_id,
         "title": title,
@@ -150,11 +196,35 @@ async def admin_property_submit(
         "bhk": bhk,
         "property_type": property_type,
         "availability": availability,
+        "listing_type": listing_type,
+        "deposit": deposit,
+        "maintenance": maintenance,
+        "bedrooms": bedrooms,
+        "bathrooms": bathrooms,
+        "furnishing": furnishing,
+        "area_super": area_super,
+        "area_carpet": area_carpet,
+        "facing": facing,
+        "floor": floor,
+        "total_floors": total_floors,
+        "parking": parking,
+        "amenities": amenities,
+        "broker_name": broker_name,
+        "phone": phone,
+        "building_name": building_name,
+        "flat_number": flat_number,
+        "street": street,
+        "landmark": landmark,
+        "state": state,
+        "pincode": pincode,
+        "maps_link": maps_link_field,
+        "latitude": latitude,
+        "longitude": longitude,
         "image_link": image_link,
-        "all_image_urls": image_urls,
+        "all_image_urls": all_image_urls,
     }
 
-    # ── 2. Meta catalog creation ───────────────────────────────────────────────
+    # ── 4. Meta catalog creation ───────────────────────────────────────────────
     meta_response = None
     meta_error = None
     if MOCK_MODE:
@@ -167,7 +237,7 @@ async def admin_property_submit(
             meta_error = str(exc)
             logger.error("[Meta] Catalog creation failed: %s", meta_error)
 
-    # ── 3. WhatsApp confirmation (non-blocking) ───────────────────────────────
+    # ── 5. WhatsApp confirmation (non-blocking) ───────────────────────────────
     whatsapp_result = {"status": "skipped"}
     if not meta_error:
         if MOCK_MODE:
@@ -175,28 +245,28 @@ async def admin_property_submit(
         else:
             whatsapp_result = await send_confirmation(property_data)
 
-    # ── 4. Google Maps link ───────────────────────────────────────────────────
+    # ── 6. Google Maps link ───────────────────────────────────────────────────
     maps_query = f"{locality}, {city}"
-    maps_link = f"https://www.google.com/maps/search/?api=1&query={maps_query.replace(' ', '+')}"
+    auto_maps_link = f"https://www.google.com/maps/search/?api=1&query={maps_query.replace(' ', '+')}"
+    final_maps_link = maps_link_field if maps_link_field else auto_maps_link
 
-    result_ctx = {
-        "request": request,
-        "token": token,
-        "mock_mode": MOCK_MODE,
-        "property": property_data,
-        "meta_response": json.dumps(meta_response, indent=2) if meta_response else None,
-        "meta_error": meta_error,
-        "whatsapp_result": whatsapp_result,
-        "maps_link": maps_link,
-        "image_urls": image_urls,
-    }
-
-    return templates.TemplateResponse("success.html", result_ctx, status_code=200 if not meta_error else 422)
+    return templates.TemplateResponse(
+        "success.html",
+        {
+            "request": request, "token": token, "mock_mode": MOCK_MODE,
+            "property": property_data,
+            "meta_response": json.dumps(meta_response, indent=2) if meta_response else None,
+            "meta_error": meta_error,
+            "whatsapp_result": whatsapp_result,
+            "maps_link": final_maps_link,
+            "image_urls": all_image_urls,
+        },
+        status_code=200 if not meta_error else 422,
+    )
 
 
 @app.get("/catalog/property/{property_id}")
 async def catalog_debug(property_id: str, request: Request, _: None = Depends(verify_admin)):
-    """Return last payload and raw Meta response for a property. Protected by admin token."""
     info = get_debug_info(property_id)
     if not info.get("payload") and not info.get("response"):
         raise HTTPException(status_code=404, detail=f"No debug data found for property_id: {property_id}")
@@ -212,7 +282,6 @@ async def health():
     return {"status": "ok", "mock_mode": MOCK_MODE}
 
 
-# ── Entry point ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 5000))
