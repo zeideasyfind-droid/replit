@@ -27,11 +27,10 @@ async def upload_images(files: List[UploadFile], property_id: str) -> List[str]:
         )
         try:
             contents = await file.read()
-            public_id = f"easyfind/{property_id}_{idx}"
+            public_id = f"easyfind_properties/{property_id}_{idx}"
             result = cloudinary.uploader.upload(
                 contents,
                 public_id=public_id,
-                folder="easyfind_properties",
                 overwrite=True,
                 resource_type="image",
             )

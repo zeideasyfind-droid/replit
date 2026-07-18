@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 WHATSAPP_ACCESS_TOKEN = os.environ.get("WHATSAPP_ACCESS_TOKEN", "")
 WHATSAPP_PHONE_NUMBER_ID = os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "")
 WHATSAPP_RECIPIENT_NUMBER = os.environ.get("WHATSAPP_RECIPIENT_NUMBER", "")
-GRAPH_BASE = "https://graph.facebook.com/v18.0"
+GRAPH_BASE = "https://graph.facebook.com/v25.0"
 
 
 async def send_confirmation(property_data: Dict[str, Any]) -> Dict[str, Any]:
