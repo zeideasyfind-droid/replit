@@ -286,6 +286,15 @@ function addCard() {
   card.innerHTML = `
     <div class="prop-card-title">Property #${n}</div>
     <button class="remove-card-btn" onclick="removeCard('card-${n}')">✕ Remove</button>
+    <div style="margin-bottom:14px">
+      <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:5px">💡 Smart Paste — paste raw property text and fields will be auto-filled</label>
+      <textarea class="f-raw-paste" rows="3" style="width:100%;font-size:12px;resize:vertical;border:1px solid var(--border);border-radius:6px;padding:8px" placeholder="Paste WhatsApp forward or broker listing here…"></textarea>
+      <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">
+        <button type="button" class="btn btn-secondary" style="font-size:12px;padding:5px 12px" onclick="mapCardPaste(document.getElementById('card-${n}'))">⚡ Map Fields</button>
+        <button type="button" class="btn btn-secondary" style="font-size:12px;padding:5px 12px" onclick="clearCardMapped(document.getElementById('card-${n}'))">✕ Clear Mapped</button>
+      </div>
+      <div class="f-paste-result" style="font-size:11px;color:var(--muted);margin-top:5px"></div>
+    </div>
     <div class="form-grid">
       <div class="form-group fg-full">
         <label>Title <span class="req">*</span></label>
@@ -510,6 +519,124 @@ async function generateAll() {
   } catch (err) {
     showToast('Request failed: ' + err.message);
   }
+}
+
+// ── Smart Paste for bulk cards (mirrors admin_property.html logic) ───
+function mapCardPaste(cardEl) {
+  const raw = cardEl.querySelector('.f-raw-paste').value.trim();
+  const resultEl = cardEl.querySelector('.f-paste-result');
+  if (!raw) { showToast('Paste some property text first.'); return; }
+
+  const extracted = {};
+
+  // BHK → feeds title auto-generation
+  const bhkM = raw.match(/(\d)\s*(?:bhk|bedroom)/i);
+  let bhkStr = '';
+  if (bhkM) bhkStr = bhkM[1] + ' BHK';
+
+  // Price / Rent
+  const croreM = raw.match(/(?:₹\s*)?(\d+(?:\.\d+)?)\s*(?:cr|crore)/i);
+  const lakhM  = raw.match(/(?:₹\s*)?(\d+(?:\.\d+)?)\s*(?:l|lakh|lakhs)/i);
+  const rentM  = raw.match(/(?:₹\s*|rs\.?\s*)(\d[\d,]+)\s*(?:\/\s*(?:month|mon|mo|pm))?/i);
+  if (croreM)      extracted.rent = String(Math.round(parseFloat(croreM[1]) * 1e7));
+  else if (lakhM)  extracted.rent = String(Math.round(parseFloat(lakhM[1]) * 1e5));
+  else if (rentM)  extracted.rent = rentM[1].replace(/,/g, '');
+
+  // Deposit
+  const depositM = raw.match(/deposit[:\s₹]*([0-9,]+)/i);
+  if (depositM) extracted.deposit = depositM[1].replace(/,/g, '');
+
+  // Maintenance
+  const maintM = raw.match(/maintenance[:\s₹]*([0-9,]+)/i);
+  if (maintM) extracted.maintenance = maintM[1].replace(/,/g, '');
+
+  // Area → sqft
+  const areaM = raw.match(/(\d+(?:\.\d+)?)\s*(?:sqft|sq\.?\s*ft|square\s*feet)/i);
+  if (areaM) extracted.sqft = areaM[1];
+
+  // Floor
+  const floorM = raw.match(/(\d+)(?:st|nd|rd|th)?\s*floor/i);
+  if (floorM) extracted.floor = floorM[1];
+
+  // Furnishing (must match select option values exactly)
+  if (/fully\s*furnished/i.test(raw))      extracted.furnishing = 'Fully Furnished';
+  else if (/semi\s*furnished/i.test(raw))  extracted.furnishing = 'Semi-Furnished';
+  else if (/unfurnished/i.test(raw))       extracted.furnishing = 'Unfurnished';
+
+  // Availability → available_from
+  if (/ready\s*to\s*move|immediate|vacant|available\s*now/i.test(raw)) extracted.available_from = 'Immediate';
+  else {
+    const dateM = raw.match(/available\s*(?:from)?\s*((?:\d{4}-\d{2}-\d{2}|\w+\s+\d{4}))/i);
+    if (dateM) extracted.available_from = dateM[1];
+  }
+
+  // Google Maps URL → map_link
+  const mapsM = raw.match(/https?:\/\/(?:maps\.google\.com|goo\.gl\/maps|maps\.app\.goo\.gl|www\.google\.com\/maps)[^\s]*/i);
+  if (mapsM) extracted.map_link = mapsM[0];
+
+  // City → location field
+  const cities = ['bengaluru','bangalore','mumbai','delhi','hyderabad','chennai','pune','kolkata','ahmedabad','surat','jaipur','noida','gurgaon','gurugram'];
+  const cityFound = cities.find(c => raw.toLowerCase().includes(c));
+  if (cityFound) {
+    const cityMap = {'bangalore':'Bengaluru','gurugram':'Gurgaon'};
+    extracted.location = cityMap[cityFound] || (cityFound.charAt(0).toUpperCase() + cityFound.slice(1));
+  }
+
+  // Preferred tenant
+  if (/\bfamily|families\b/i.test(raw) && /working|professional/i.test(raw)) extracted.preferred_tenant = 'Family / Working Professionals';
+  else if (/\bfamily|families\b/i.test(raw)) extracted.preferred_tenant = 'Family';
+  else if (/working|professional/i.test(raw)) extracted.preferred_tenant = 'Working Professionals';
+
+  // Auto-generate title if title field is empty
+  const titleEl = cardEl.querySelector('.f-title');
+  if (!titleEl.value && bhkStr) {
+    const loc = extracted.location || '';
+    extracted.title = loc ? `${bhkStr} Property • ${loc}` : `${bhkStr} Property`;
+  }
+
+  // Map class → extracted key
+  const fieldMap = {
+    '.f-title': 'title', '.f-rent': 'rent', '.f-maintenance': 'maintenance',
+    '.f-deposit': 'deposit', '.f-sqft': 'sqft', '.f-floor': 'floor',
+    '.f-furnishing': 'furnishing', '.f-available': 'available_from',
+    '.f-map': 'map_link', '.f-location': 'location', '.f-tenant': 'preferred_tenant',
+  };
+
+  const applied = [];
+  const _mapped = cardEl._mappedFields || (cardEl._mappedFields = new Set());
+  Object.entries(fieldMap).forEach(([cls, key]) => {
+    if (!(key in extracted)) return;
+    const el = cardEl.querySelector(cls);
+    if (!el || el.value) return; // don't overwrite already-filled fields
+    el.value = extracted[key];
+    el.style.background = '#fffbe6';
+    _mapped.add(cls);
+    applied.push(key);
+  });
+
+  if (applied.length) {
+    resultEl.textContent = `✓ Mapped: ${applied.join(', ')}`;
+    showToast(`✓ Mapped ${applied.length} field${applied.length > 1 ? 's' : ''}`);
+  } else {
+    resultEl.textContent = 'Nothing new to map — fields may already be filled or no matching data found.';
+    showToast('Nothing new to map.');
+  }
+}
+
+function clearCardMapped(cardEl) {
+  const _mapped = cardEl._mappedFields;
+  if (_mapped) {
+    _mapped.forEach(cls => {
+      const el = cardEl.querySelector(cls);
+      if (el) { el.value = ''; el.style.background = ''; }
+    });
+    _mapped.clear();
+  }
+  const rawEl = cardEl.querySelector('.f-raw-paste');
+  if (rawEl) rawEl.value = '';
+  const resultEl = cardEl.querySelector('.f-paste-result');
+  if (resultEl) resultEl.textContent = '';
+  showToast('Cleared mapped fields for this property.');
 }
 
 // ── Init ──────────────────────────────────────────────────

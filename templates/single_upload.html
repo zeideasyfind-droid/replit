@@ -125,6 +125,22 @@
 
   <!-- ── Step 1: Property Details ───────────────────────── -->
   <div class="step-panel visible" id="panel-1">
+
+    <!-- ── Raw Paste Block ──────────────────────────────── -->
+    <div class="section">
+      <div class="section-head"><div class="section-badge">💡</div><h2>Smart Paste <span style="font-weight:400;font-size:12px;color:var(--muted);text-transform:none">— paste any raw property description and fields will be auto-filled</span></h2></div>
+      <div class="section-body">
+        <div class="form-group">
+          <textarea id="raw_paste" rows="5" style="width:100%;font-size:13px;resize:vertical" placeholder="Paste a WhatsApp forward, broker listing, or any unstructured property text here and click Map Fields…"></textarea>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
+          <button type="button" class="btn btn-secondary" onclick="runPasteMapping()">⚡ Map Fields</button>
+          <button type="button" class="btn btn-secondary" onclick="clearMapped()">✕ Clear Mapped</button>
+        </div>
+        <div id="paste-result" style="margin-top:10px;font-size:12px;color:var(--muted)"></div>
+      </div>
+    </div>
+
     <div class="section">
       <div class="section-head"><div class="section-badge">A</div><h2>Basic Information</h2></div>
       <div class="section-body">
@@ -312,6 +328,127 @@ function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+// ── Smart Paste (mirrors admin_property.html logic) ───────
+const _mappedSingle = new Set();
+
+function runPasteMapping() {
+  const raw = document.getElementById('raw_paste').value.trim();
+  if (!raw) { showToast('Paste some property text first.'); return; }
+
+  const extracted = {};
+
+  // BHK → feeds title auto-generation
+  const bhkM = raw.match(/(\d)\s*(?:bhk|bedroom)/i);
+  let bhkStr = '';
+  if (bhkM) { bhkStr = bhkM[1] + ' BHK'; }
+
+  // Price / Rent
+  const croreM = raw.match(/(?:₹\s*)?(\d+(?:\.\d+)?)\s*(?:cr|crore)/i);
+  const lakhM  = raw.match(/(?:₹\s*)?(\d+(?:\.\d+)?)\s*(?:l|lakh|lakhs)/i);
+  const rentM  = raw.match(/(?:₹\s*|rs\.?\s*)(\d[\d,]+)\s*(?:\/\s*(?:month|mon|mo|pm))?/i);
+  if (croreM)      extracted.rent = String(Math.round(parseFloat(croreM[1]) * 1e7));
+  else if (lakhM)  extracted.rent = String(Math.round(parseFloat(lakhM[1]) * 1e5));
+  else if (rentM)  extracted.rent = rentM[1].replace(/,/g, '');
+
+  // Deposit
+  const depositM = raw.match(/deposit[:\s₹]*([0-9,]+)/i);
+  if (depositM) extracted.deposit = depositM[1].replace(/,/g, '');
+
+  // Maintenance
+  const maintM = raw.match(/maintenance[:\s₹]*([0-9,]+)/i);
+  if (maintM) extracted.maintenance = maintM[1].replace(/,/g, '');
+
+  // Area → sqft
+  const areaM = raw.match(/(\d+(?:\.\d+)?)\s*(?:sqft|sq\.?\s*ft|square\s*feet)/i);
+  if (areaM) extracted.sqft = areaM[1];
+
+  // Floor
+  const floorM = raw.match(/(\d+)(?:st|nd|rd|th)?\s*floor/i);
+  if (floorM) extracted.floor = floorM[1];
+
+  // Furnishing (select values must match exactly)
+  if (/fully\s*furnished/i.test(raw))      extracted.furnishing = 'Fully Furnished';
+  else if (/semi\s*furnished/i.test(raw))  extracted.furnishing = 'Semi-Furnished';
+  else if (/unfurnished/i.test(raw))       extracted.furnishing = 'Unfurnished';
+
+  // Availability → available_from
+  if (/ready\s*to\s*move|immediate|vacant|available\s*now/i.test(raw)) extracted.available_from = 'Immediate';
+  else {
+    // Try to pull a date like "available from Jan 2025" or "available from 2025-02-01"
+    const dateM = raw.match(/available\s*(?:from)?\s*((?:\d{4}-\d{2}-\d{2}|\w+\s+\d{4}))/i);
+    if (dateM) extracted.available_from = dateM[1];
+  }
+
+  // Google Maps URL → map_link
+  const mapsM = raw.match(/https?:\/\/(?:maps\.google\.com|goo\.gl\/maps|maps\.app\.goo\.gl|www\.google\.com\/maps)[^\s]*/i);
+  if (mapsM) extracted.map_link = mapsM[0];
+
+  // Image URLs → gallery_link (first image URL as gallery hint if present)
+  const imgUrls = raw.match(/https?:\/\/[^\s]+\.(?:jpg|jpeg|png|webp)/gi);
+  if (imgUrls && imgUrls.length) extracted.gallery_link = imgUrls[0];
+
+  // City → location field
+  const cities = ['bengaluru','bangalore','mumbai','delhi','hyderabad','chennai','pune','kolkata','ahmedabad','surat','jaipur','noida','gurgaon','gurugram'];
+  const cityFound = cities.find(c => raw.toLowerCase().includes(c));
+  if (cityFound) {
+    const cityMap = {'bangalore':'Bengaluru','gurugram':'Gurgaon'};
+    extracted.location = cityMap[cityFound] || (cityFound.charAt(0).toUpperCase() + cityFound.slice(1));
+  }
+
+  // Preferred tenant
+  if (/\bfamily|families\b/i.test(raw) && /working|professional/i.test(raw)) extracted.preferred_tenant = 'Family / Working Professionals';
+  else if (/\bfamily|families\b/i.test(raw)) extracted.preferred_tenant = 'Family';
+  else if (/working|professional/i.test(raw)) extracted.preferred_tenant = 'Working Professionals';
+
+  // Auto-generate title if title is empty and we have BHK + location clue
+  if (!document.getElementById('title').value && bhkStr) {
+    const loc = extracted.location || '';
+    if (loc) extracted.title = `${bhkStr} Property • ${loc}`;
+    else     extracted.title = `${bhkStr} Property`;
+  }
+
+  // Field ID map: extracted key → form element ID
+  const fieldMap = {
+    title: 'title', rent: 'rent', maintenance: 'maintenance',
+    deposit: 'deposit', sqft: 'sqft', floor: 'floor',
+    furnishing: 'furnishing', available_from: 'available_from',
+    map_link: 'map_link', gallery_link: 'gallery_link', location: 'location',
+    preferred_tenant: 'preferred_tenant',
+  };
+
+  const applied = [];
+  Object.entries(extracted).forEach(([key, val]) => {
+    const id = fieldMap[key];
+    if (!id) return;
+    const el = document.getElementById(id);
+    if (!el || el.value) return; // don't overwrite already-filled fields
+    el.value = val;
+    el.style.background = '#fffbe6';
+    _mappedSingle.add(id);
+    applied.push(key);
+  });
+
+  const resultEl = document.getElementById('paste-result');
+  if (applied.length) {
+    resultEl.textContent = `✓ Mapped: ${applied.join(', ')}`;
+    showToast(`✓ Mapped ${applied.length} field${applied.length > 1 ? 's' : ''}`);
+  } else {
+    resultEl.textContent = 'Nothing new to map — fields may already be filled or no matching data found.';
+    showToast('Nothing new to map.');
+  }
+}
+
+function clearMapped() {
+  _mappedSingle.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.value = ''; el.style.background = ''; }
+  });
+  _mappedSingle.clear();
+  document.getElementById('raw_paste').value = '';
+  document.getElementById('paste-result').textContent = '';
+  showToast('Cleared mapped fields.');
 }
 
 // ── Stepper ───────────────────────────────────────────────
