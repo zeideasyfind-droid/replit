@@ -170,7 +170,7 @@
     <div class="sub">Bulk Property Upload</div>
   </div>
   <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
-    <a href="/{% if token %}?token={{ token }}{% endif %}" style="font-size:13px;color:var(--muted);text-decoration:none">← Home</a>
+    <a href="/" style="font-size:13px;color:var(--muted);text-decoration:none">← Home</a>
   </div>
 </header>
 
@@ -241,7 +241,7 @@
       </div>
     </div>
     <div class="nav-row" style="justify-content:center">
-      <a class="btn btn-primary" href="/bulk_upload{% if token %}?token={{ token }}{% endif %}">➕ Upload Another Batch</a>
+      <a class="btn btn-primary" href="/bulk_upload">➕ Upload Another Batch</a>
     </div>
   </div>
 
@@ -251,7 +251,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const TOKEN = new URLSearchParams(window.location.search).get('token') || '';
+const TOKEN = '';
 let cardCount = 0;
 let bulkProperties = [];
 
@@ -443,7 +443,7 @@ function updateCount(input) {
 // ── Step 2 → Step 3 ───────────────────────────────────────
 async function goToPreview() {
   try {
-    const resp = await fetch(`/api/preview-bulk?token=${encodeURIComponent(TOKEN)}`, {
+    const resp = await fetch(`/api/preview-bulk`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ properties: bulkProperties }),
@@ -487,7 +487,7 @@ function copyText(btn) {
 // ── Step 3 → Step 4 ───────────────────────────────────────
 async function generateAll() {
   try {
-    const resp = await fetch(`/api/generate-bulk?token=${encodeURIComponent(TOKEN)}`, {
+    const resp = await fetch(`/api/generate-bulk`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ properties: bulkProperties }),
@@ -502,9 +502,9 @@ async function generateAll() {
 
     const list = document.getElementById('download-list');
     list.innerHTML = `
-      <li><a href="${result.zip_file}?token=${encodeURIComponent(TOKEN)}" download>📦 Download All (ZIP)</a></li>
-      <li><a href="${result.txt_file}?token=${encodeURIComponent(TOKEN)}" download>📝 All Messages (.txt)</a></li>
-      <li><a href="${result.json_file}?token=${encodeURIComponent(TOKEN)}" download>📊 Property Data (.json)</a></li>
+      <li><a href="${result.zip_file}" download>📦 Download All (ZIP)</a></li>
+      <li><a href="${result.txt_file}" download>📝 All Messages (.txt)</a></li>
+      <li><a href="${result.json_file}" download>📊 Property Data (.json)</a></li>
     `;
     goTo(4);
   } catch (err) {

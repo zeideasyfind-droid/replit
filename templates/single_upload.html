@@ -109,7 +109,7 @@
     <div class="sub">Single Property Upload</div>
   </div>
   <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
-    <a href="/{% if token %}?token={{ token }}{% endif %}" style="font-size:13px;color:var(--muted);text-decoration:none">← Home</a>
+    <a href="/" style="font-size:13px;color:var(--muted);text-decoration:none">← Home</a>
   </div>
 </header>
 
@@ -295,7 +295,7 @@
     </div>
     <div class="nav-row">
       <button class="btn btn-secondary" onclick="goTo(3)">← Back to Preview</button>
-      <a class="btn btn-primary" href="/single_upload{% if token %}?token={{ token }}{% endif %}">➕ Upload Another</a>
+      <a class="btn btn-primary" href="/single_upload">➕ Upload Another</a>
     </div>
   </div>
 
@@ -305,7 +305,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const TOKEN = new URLSearchParams(window.location.search).get('token') || '';
+const TOKEN = '';
 
 // ── Toast ─────────────────────────────────────────────────
 function showToast(msg) {
@@ -402,7 +402,7 @@ async function goToPreview() {
   }
   const data = collectData();
   try {
-    const resp = await fetch(`/api/preview-single?token=${encodeURIComponent(TOKEN)}`, {
+    const resp = await fetch(`/api/preview-single`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -426,7 +426,7 @@ function copyMessage() {
 async function generate() {
   const data = collectData();
   try {
-    const resp = await fetch(`/api/generate-single?token=${encodeURIComponent(TOKEN)}`, {
+    const resp = await fetch(`/api/generate-single`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -436,8 +436,8 @@ async function generate() {
 
     const list = document.getElementById('download-list');
     list.innerHTML = `
-      <li><a href="${result.whatsapp_file}?token=${encodeURIComponent(TOKEN)}" download>📄 WhatsApp Message (.txt)</a></li>
-      <li><a href="${result.json_file}?token=${encodeURIComponent(TOKEN)}" download>📊 Property Data (.json)</a></li>
+      <li><a href="${result.whatsapp_file}" download>📄 WhatsApp Message (.txt)</a></li>
+      <li><a href="${result.json_file}" download>📊 Property Data (.json)</a></li>
     `;
     goTo(4);
   } catch (err) {

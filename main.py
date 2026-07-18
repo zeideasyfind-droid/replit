@@ -91,7 +91,6 @@ async def admin_property_form(request: Request):
 @app.post("/admin/property", response_class=HTMLResponse)
 async def admin_property_submit(
     request: Request,
-    _: None = Depends(verify_admin),
     # ── Core fields (required) ────────────────────────────────────────────────
     property_id: str = Form(...),
     title: str = Form(...),
@@ -134,7 +133,6 @@ async def admin_property_submit(
     cover_image_index: str = Form(default="0"),
     images: List[UploadFile] = File(default=[]),
 ):
-    token = request.query_params.get("token", "")
     errors = []
 
     # ── 1. Upload file images to Cloudinary ───────────────────────────────────
@@ -164,7 +162,7 @@ async def admin_property_submit(
         return templates.TemplateResponse(
             "admin_property.html",
             {
-                "request": request, "token": token, "mock_mode": MOCK_MODE,
+                "request": request, "mock_mode": MOCK_MODE,
                 "errors": errors,
                 "form_data": {
                     "property_id": property_id, "title": title,
@@ -274,7 +272,7 @@ async def admin_property_submit(
 
 
 @app.get("/catalog/property/{property_id}")
-async def catalog_debug(property_id: str, request: Request, _: None = Depends(verify_admin)):
+async def catalog_debug(property_id: str, request: Request):
     info = get_debug_info(property_id)
     if not info.get("payload") and not info.get("response"):
         raise HTTPException(status_code=404, detail=f"No debug data found for property_id: {property_id}")
@@ -301,7 +299,7 @@ async def single_upload_page(request: Request):
 
 
 @app.post("/api/preview-single")
-async def api_preview_single(request: Request, _: None = Depends(verify_admin)):
+async def api_preview_single(request: Request):
     try:
         data = await request.json()
         message = format_whatsapp_message(data)
@@ -313,7 +311,7 @@ async def api_preview_single(request: Request, _: None = Depends(verify_admin)):
 
 
 @app.post("/api/generate-single")
-async def api_generate_single(request: Request, _: None = Depends(verify_admin)):
+async def api_generate_single(request: Request):
     try:
         data = await request.json()
         message = format_whatsapp_message(data)
@@ -353,7 +351,7 @@ async def bulk_upload_page(request: Request):
 
 
 @app.post("/api/preview-bulk")
-async def api_preview_bulk(request: Request, _: None = Depends(verify_admin)):
+async def api_preview_bulk(request: Request):
     try:
         body = await request.json()
         properties = body.get("properties", [])
@@ -371,7 +369,7 @@ async def api_preview_bulk(request: Request, _: None = Depends(verify_admin)):
 
 
 @app.post("/api/generate-bulk")
-async def api_generate_bulk(request: Request, _: None = Depends(verify_admin)):
+async def api_generate_bulk(request: Request):
     try:
         body = await request.json()
         properties = body.get("properties", [])
