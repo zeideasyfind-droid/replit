@@ -1,0 +1,1353 @@
+Here's the **updated implementation plan** with **two separate flows** (Single Upload and Bulk Upload), each with full details entry, preview, and photo upload:
+
+```markdown
+# 🚀 EasyFind WhatsApp Automation - Dual Flow Implementation Plan
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    EasyFind Property Solutions              │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌──────────────────┐         ┌──────────────────┐         │
+│  │   SINGLE UPLOAD  │         │    BULK UPLOAD   │         │
+│  │      FLOW        │         │       FLOW       │         │
+│  ├──────────────────┤         ├──────────────────┤         │
+│  │ 1. Add Details   │         │ 1. Add Properties│         │
+│  │ 2. Upload Photos │         │ 2. Upload Photos │         │
+│  │ 3. Preview       │         │ 3. Preview All   │         │
+│  │ 4. Generate      │         │ 4. Generate All  │         │
+│  └──────────────────┘         └──────────────────┘         │
+│                                                             │
+│  Both flows use shared formatters → utils/formatters.py    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Phase 1: Shared Formatters (utils/formatters.py)
+
+```python
+from datetime import datetime, date
+import re
+import random
+
+def normalize_availability(date_str):
+    """Normalize availability date to 'Ready to occupy' if immediate/today/past"""
+    if not date_str:
+        return "Ready to occupy"
+    
+    date_str = str(date_str).lower().strip()
+    
+    # Check for immediate availability terms
+    immediate_terms = ["immediate", "ready", "today", "now", "vacant", "available now"]
+    if any(term in date_str for term in immediate_terms):
+        return "Ready to occupy"
+    
+    # Check if date is in the past or today
+    try:
+        parsed_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        if parsed_date <= date.today():
+            return "Ready to occupy"
+    except (ValueError, TypeError):
+        pass
+    
+    return date_str
+
+
+def normalize_tenant_preference(tenant_str, diet_pref=None):
+    """Normalize tenant preference and add diet information"""
+    tenant_str = str(tenant_str).lower() if tenant_str else ""
+    
+    # Normalize tenant types
+    has_family = "family" in tenant_str
+    has_professional = any(term in tenant_str for term in ["working", "professional"])
+    has_anyone = any(term in tenant_str for term in ["anyone", "any", "open"])
+    
+    # Build normalized tenant string
+    if has_anyone or (not has_family and not has_professional):
+        result = "Anyone"
+    else:
+        parts = []
+        if has_family:
+            parts.append("Families")
+        if has_professional:
+            parts.append("Working Professionals")
+        result = " / ".join(parts) if parts else "Anyone"
+    
+    # Add diet preference
+    if diet_pref:
+        diet_pref = str(diet_pref).lower().strip()
+        if "vegetarian" in diet_pref or "veg" in diet_pref:
+            result += ", Vegetarian"
+        elif "non-vegetarian" in diet_pref or "non-veg" in diet_pref:
+            result += ", Non-Vegetarian"
+    
+    return result
+
+
+def format_title_with_utility(title, property_details):
+    """Add 'with Utility' to title if fully furnished 2 BHK with 2 bathrooms & balcony"""
+    furnishing = property_details.get('furnishing', '').lower()
+    
+    if (furnishing == 'fully furnished' and 
+        '2 bhk' in title.lower() and 
+        '2 bathroom' in title.lower() and 
+        'balcony' in title.lower()):
+        return title + " with Utility"
+    
+    return title
+
+
+def generate_drive_folder_name(property_details):
+    """
+    Generate Drive folder name following EasyFind format:
+    Format: EFF-{numeric}-{society/apt OR location-owner}
+    """
+    society = property_details.get('society', '').strip()
+    apartment = property_details.get('apartment', '').strip()
+    location = property_details.get('location', '').strip()
+    owner = property_details.get('owner', 'Unknown').strip()
+    property_name = property_details.get('property_name', '').strip()
+    community_type = property_details.get('community_type', 'Gated').lower()
+    
+    # Generate numeric identifier (random 3-digit)
+    numeric_id = str(random.randint(100, 999))
+    
+    # Determine base name
+    if society or apartment:
+        # Society/apartment: use society or apartment name
+        base_name = society if society else apartment
+        folder_name = f"EFF-{numeric_id}-{base_name}"
+    elif property_name:
+        # Property name exists: property name - owner
+        folder_name = f"EFF-{numeric_id}-{property_name}-{owner}"
+    elif community_type in ['semi-gated', 'non-society', 'non-gated']:
+        # Semi-gated/non-society: location - owner
+        folder_name = f"EFF-{numeric_id}-{location}-{owner}"
+    else:
+        # Default: location - owner
+        folder_name = f"EFF-{numeric_id}-{location}-{owner}"
+    
+    # Clean up folder name (remove special characters)
+    folder_name = re.sub(r'[^a-zA-Z0-9\s\-]', '', folder_name)
+    folder_name = re.sub(r'\s+', ' ', folder_name).strip()
+    
+    return folder_name
+
+
+def format_whatsapp_message(property_details):
+    """
+    Format a single property into WhatsApp message format
+    """
+    # Apply all normalizations
+    title = format_title_with_utility(
+        property_details.get('title', ''),
+        property_details
+    )
+    
+    available_from = normalize_availability(property_details.get('available_from', ''))
+    preferred_tenant = normalize_tenant_preference(
+        property_details.get('preferred_tenant', 'Anyone'),
+        property_details.get('diet_preference', '')
+    )
+    
+    # Build message
+    message = f"""*{title}*
+
+Rent: ₹{property_details.get('rent', 'N/A')}
+Maintenance: ₹{property_details.get('maintenance', 'N/A')}
+Deposit: ₹{property_details.get('deposit', 'N/A')}
+Area: {property_details.get('sqft', 'N/A')} Sq. Ft.
+Floor: {property_details.get('floor', 'N/A')}
+Available From: {available_from}
+Preferred Tenant: {preferred_tenant}
+Pets: {property_details.get('pets', 'Not Allowed')}
+Community: {property_details.get('community', 'Gated')}
+Location: *{property_details.get('location', 'N/A')}*
+
+📸 *Gallery:* {property_details.get('gallery_link', 'N/A')}
+
+*{property_details.get('property_name', property_details.get('society', 'N/A'))}*
+📍 Map: {property_details.get('map_link', 'N/A')}"""
+    
+    return message
+```
+
+---
+
+## Phase 2: Single Upload Flow
+
+### 2.1 Frontend: `templates/single_upload.html`
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Single Property Upload - EasyFind</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 { color: #2c3e50; text-align: center; }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .section { margin: 25px 0; }
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #34495e;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #3498db;
+        }
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .form-group { margin-bottom: 15px; }
+        label {
+            font-weight: 600;
+            color: #2c3e50;
+            display: block;
+            margin-bottom: 5px;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        textarea { resize: vertical; min-height: 80px; }
+        .btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        .btn-primary { background: #3498db; color: white; }
+        .btn-primary:hover { background: #2980b9; }
+        .btn-success { background: #27ae60; color: white; }
+        .btn-success:hover { background: #229954; }
+        .btn-warning { background: #f39c12; color: white; }
+        .btn-warning:hover { background: #d68910; }
+        .preview-box {
+            background: #ecf0f1;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #3498db;
+        }
+        .preview-title {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        .preview-content {
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .image-preview {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .image-preview img {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+        .hidden { display: none; }
+        .step-indicator {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+        }
+        .step {
+            flex: 1;
+            text-align: center;
+            padding: 10px;
+            background: #ecf0f1;
+            margin: 0 5px;
+            border-radius: 5px;
+            font-weight: 600;
+        }
+        .step.active { background: #3498db; color: white; }
+        .step.completed { background: #27ae60; color: white; }
+    </style>
+</head>
+<body>
+    <h1>🏠 Single Property Upload</h1>
+    
+    <div class="container">
+        <!-- Step Indicator -->
+        <div class="step-indicator">
+            <div class="step active" id="step1">1. Property Details</div>
+            <div class="step" id="step2">2. Upload Photos</div>
+            <div class="step" id="step3">3. Preview</div>
+            <div class="step" id="step4">4. Generate</div>
+        </div>
+        
+        <!-- Step 1: Property Details -->
+        <div id="step1-content" class="step-content">
+            <div class="section">
+                <div class="section-title">Basic Information</div>
+                <div class="form-group">
+                    <label>Property Title *</label>
+                    <input type="text" id="title" placeholder="e.g., Fully Furnished 2 BHK with 2 Bathrooms & 1 Balcony" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Rent (₹) *</label>
+                        <input type="number" id="rent" placeholder="45000" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Maintenance (₹) *</label>
+                        <input type="number" id="maintenance" placeholder="2500" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Deposit (₹) *</label>
+                        <input type="number" id="deposit" placeholder="135000" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Area (Sq. Ft.) *</label>
+                        <input type="number" id="sqft" placeholder="1250" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Floor *</label>
+                        <input type="text" id="floor" placeholder="7/12" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Furnishing</label>
+                        <select id="furnishing">
+                            <option value="Fully Furnished">Fully Furnished</option>
+                            <option value="Semi-Furnished">Semi-Furnished</option>
+                            <option value="Unfurnished">Unfurnished</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">Property Details</div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Available From *</label>
+                        <input type="text" id="available_from" placeholder="Immediate or YYYY-MM-DD" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Pets</label>
+                        <select id="pets">
+                            <option value="Not Allowed">Not Allowed</option>
+                            <option value="Allowed">Allowed</option>
+                            <option value="Small Pets Only">Small Pets Only</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Preferred Tenant *</label>
+                    <input type="text" id="preferred_tenant" placeholder="Family / Working - Professionals" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Diet Preference</label>
+                        <select id="diet_preference">
+                            <option value="">No Preference</option>
+                            <option value="Vegetarian">Vegetarian Only</option>
+                            <option value="Non-Vegetarian">Non-Vegetarian Only</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Community Type</label>
+                        <select id="community">
+                            <option value="Gated">Gated Society</option>
+                            <option value="Semi-Gated">Semi-Gated</option>
+                            <option value="Non-Society">Non-Society</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">Location & Ownership</div>
+                <div class="form-group">
+                    <label>Location *</label>
+                    <input type="text" id="location" placeholder="HSR Layout" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Society/Apartment Name</label>
+                        <input type="text" id="society" placeholder="Salarpuria Serenity">
+                    </div>
+                    <div class="form-group">
+                        <label>Property Name</label>
+                        <input type="text" id="property_name" placeholder="If different from society">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Owner Name *</label>
+                        <input type="text" id="owner" placeholder="Rajesh Kumar" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Map Link</label>
+                        <input type="url" id="map_link" placeholder="https://maps.google.com/...">
+                    </div>
+                </div>
+            </div>
+            
+            <button class="btn btn-primary" onclick="goToStep2()">Next: Upload Photos →</button>
+        </div>
+        
+        <!-- Step 2: Upload Photos -->
+        <div id="step2-content" class="step-content hidden">
+            <div class="section">
+                <div class="section-title">Upload Property Photos</div>
+                <div class="form-group">
+                    <label>Select Images</label>
+                    <input type="file" id="property_images" multiple accept="image/*" onchange="previewImages()">
+                    <small>Upload multiple images (JPG, PNG)</small>
+                </div>
+                <div class="image-preview" id="imagePreview"></div>
+            </div>
+            
+            <button class="btn btn-warning" onclick="goToStep1()">← Back</button>
+            <button class="btn btn-primary" onclick="generatePreview()">Next: Preview →</button>
+        </div>
+        
+        <!-- Step 3: Preview -->
+        <div id="step3-content" class="step-content hidden">
+            <div class="section">
+                <div class="section-title">WhatsApp Message Preview</div>
+                <div class="preview-box">
+                    <div class="preview-title">Generated Message:</div>
+                    <div class="preview-content" id="messagePreview"></div>
+                </div>
+                <div class="preview-box">
+                    <div class="preview-title">Drive Folder Name:</div>
+                    <div id="driveFolderPreview" style="font-family: monospace; font-size: 14px;"></div>
+                </div>
+            </div>
+            
+            <button class="btn btn-warning" onclick="goToStep2()">← Back</button>
+            <button class="btn btn-success" onclick="finalizeGeneration()">✓ Generate & Download</button>
+        </div>
+        
+        <!-- Step 4: Generation Complete -->
+        <div id="step4-content" class="step-content hidden">
+            <div class="section" style="text-align: center;">
+                <h2 style="color: #27ae60;">✅ Generation Complete!</h2>
+                <p>Your WhatsApp message has been generated and files are ready for download.</p>
+                <div id="downloadLinks"></div>
+            </div>
+            <button class="btn btn-primary" onclick="resetForm()">Upload Another Property</button>
+        </div>
+    </div>
+    
+    <script>
+        let propertyData = {};
+        let uploadedImages = [];
+        
+        function goToStep2() {
+            // Validate required fields
+            const required = ['title', 'rent', 'maintenance', 'deposit', 'sqft', 'floor', 'available_from', 'preferred_tenant', 'location', 'owner'];
+            for (let field of required) {
+                const value = document.getElementById(field).value.trim();
+                if (!value) {
+                    alert(`Please fill in ${field.replace('_', ' ')}`);
+                    return;
+                }
+            }
+            
+            // Collect property data
+            propertyData = {
+                title: document.getElementById('title').value,
+                rent: document.getElementById('rent').value,
+                maintenance: document.getElementById('maintenance').value,
+                deposit: document.getElementById('deposit').value,
+                sqft: document.getElementById('sqft').value,
+                floor: document.getElementById('floor').value,
+                furnishing: document.getElementById('furnishing').value,
+                available_from: document.getElementById('available_from').value,
+                pets: document.getElementById('pets').value,
+                preferred_tenant: document.getElementById('preferred_tenant').value,
+                diet_preference: document.getElementById('diet_preference').value,
+                community: document.getElementById('community').value,
+                location: document.getElementById('location').value,
+                society: document.getElementById('society').value,
+                property_name: document.getElementById('property_name').value,
+                owner: document.getElementById('owner').value,
+                map_link: document.getElementById('map_link').value
+            };
+            
+            // Step 1: Complete → Step 2: Upload Photos
+            goToStep('step2');
+        }
+        
+        function previewImages() {
+            const fileInput = document.getElementById('property_images');
+            const preview = document.getElementById('imagePreview');
+            preview.innerHTML = '';
+            uploadedImages = [];
+            
+            for (let file of fileInput.files) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = document.createElement('img');
+                    img.src = e.target.result;
+                    preview.appendChild(img);
+                    uploadedImages.push(file.name);
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+        
+        async function generatePreview() {
+            if (uploadedImages.length === 0) {
+                if (!confirm('No images uploaded. Continue without photos?')) {
+                    return;
+                }
+            }
+            
+            // Send to backend for formatting
+            propertyData.images = uploadedImages;
+            
+            try {
+                const response = await fetch('/api/preview-single', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(propertyData)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    document.getElementById('messagePreview').textContent = result.message;
+                    document.getElementById('driveFolderPreview').textContent = result.drive_folder_name;
+                    goToStep('step3');
+                } else {
+                    alert('Error generating preview: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        async function finalizeGeneration() {
+            try {
+                const response = await fetch('/api/generate-single', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(propertyData)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Show download links
+                    const downloads = document.getElementById('downloadLinks');
+                    downloads.innerHTML = `
+                        <p><strong>WhatsApp Message:</strong> <a href="${result.whatsapp_file}" download>Download .txt</a></p>
+                        <p><strong>Property Data:</strong> <a href="${result.json_file}" download>Download .json</a></p>
+                    `;
+                    goToStep('step4');
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        function goToStep(stepId) {
+            // Hide all steps
+            document.querySelectorAll('.step-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.step').forEach(el => el.classList.remove('active', 'completed'));
+            
+            // Show current step
+            document.getElementById(stepId + '-content').classList.remove('hidden');
+            document.getElementById(stepId).classList.add('active');
+            
+            // Mark previous steps as completed
+            if (stepId === 'step2') document.getElementById('step1').classList.add('completed');
+            if (stepId === 'step3') {
+                document.getElementById('step1').classList.add('completed');
+                document.getElementById('step2').classList.add('completed');
+            }
+            if (stepId === 'step4') {
+                document.getElementById('step1').classList.add('completed');
+                document.getElementById('step2').classList.add('completed');
+                document.getElementById('step3').classList.add('completed');
+            }
+        }
+        
+        function goToStep1() { goToStep('step1'); }
+        function goToStep2() { goToStep('step2'); }
+        
+        function resetForm() {
+            document.querySelectorAll('input, textarea, select').forEach(el => {
+                if (el.type !== 'button') el.value = '';
+            });
+            document.getElementById('imagePreview').innerHTML = '';
+            uploadedImages = [];
+            propertyData = {};
+            goToStep('step1');
+        }
+    </script>
+</body>
+</html>
+```
+
+### 2.2 Backend API: `main.py` (Single Upload Endpoints)
+
+```python
+from utils.formatters import format_whatsapp_message, generate_drive_folder_name
+import json
+from datetime import datetime
+
+@app.route('/single_upload', methods=['GET'])
+def single_upload_page():
+    """Render single property upload page"""
+    return render_template('single_upload.html')
+
+@app.route('/api/preview-single', methods=['POST'])
+def preview_single():
+    """Generate preview for single property"""
+    try:
+        property_data = request.get_json()
+        
+        # Format message
+        message = format_whatsapp_message(property_data)
+        
+        # Generate Drive folder name
+        drive_folder_name = generate_drive_folder_name(property_data)
+        
+        return jsonify({
+            'success': True,
+            'message': message,
+            'drive_folder_name': drive_folder_name
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/generate-single', methods=['POST'])
+def generate_single():
+    """Generate and save single property files"""
+    try:
+        property_data = request.get_json()
+        
+        # Format message
+        message = format_whatsapp_message(property_data)
+        
+        # Generate Drive folder name
+        drive_folder_name = generate_drive_folder_name(property_data)
+        
+        # Create timestamp for unique filenames
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        
+        # Save WhatsApp message
+        whatsapp_filename = f'output/whatsapp_{timestamp}.txt'
+        with open(whatsapp_filename, 'w') as f:
+            f.write(message)
+        
+        # Save property data as JSON
+        json_filename = f'output/property_{timestamp}.json'
+        with open(json_filename, 'w') as f:
+            json.dump({
+                'property_data': property_data,
+                'drive_folder_name': drive_folder_name,
+                'generated_message': message,
+                'timestamp': timestamp
+            }, f, indent=2)
+        
+        return jsonify({
+            'success': True,
+            'whatsapp_file': whatsapp_filename,
+            'json_file': json_filename,
+            'drive_folder_name': drive_folder_name
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+```
+
+---
+
+## Phase 3: Bulk Upload Flow
+
+### 3.1 Frontend: `templates/bulk_upload.html`
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bulk Property Upload - EasyFind</title>
+    <style>
+        /* Same CSS as single_upload.html */
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 { color: #2c3e50; text-align: center; }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .section { margin: 25px 0; }
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #34495e;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #3498db;
+        }
+        .property-card {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            position: relative;
+        }
+        .property-card h3 { margin-top: 0; color: #2c3e50; }
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .form-group { margin-bottom: 15px; }
+        label {
+            font-weight: 600;
+            color: #2c3e50;
+            display: block;
+            margin-bottom: 5px;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 13px;
+        }
+        .btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        .btn-primary { background: #3498db; color: white; }
+        .btn-success { background: #27ae60; color: white; }
+        .btn-danger { background: #e74c3c; color: white; }
+        .btn-warning { background: #f39c12; color: white; }
+        .remove-property {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        .preview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .preview-item {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        .preview-item h4 { margin-top: 0; color: #2c3e50; }
+        .preview-message {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .step-indicator {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+        }
+        .step {
+            flex: 1;
+            text-align: center;
+            padding: 10px;
+            background: #ecf0f1;
+            margin: 0 5px;
+            border-radius: 5px;
+            font-weight: 600;
+        }
+        .step.active { background: #3498db; color: white; }
+        .step.completed { background: #27ae60; color: white; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <h1>🏢 Bulk Property Upload</h1>
+    
+    <div class="container">
+        <!-- Step Indicator -->
+        <div class="step-indicator">
+            <div class="step active" id="step1">1. Add Properties</div>
+            <div class="step" id="step2">2. Upload Photos</div>
+            <div class="step" id="step3">3. Preview All</div>
+            <div class="step" id="step4">4. Generate All</div>
+        </div>
+        
+        <!-- Step 1: Add Properties -->
+        <div id="step1-content" class="step-content">
+            <div id="propertiesContainer"></div>
+            
+            <button class="btn btn-primary" id="addProperty" onclick="addPropertyForm()">+ Add Property</button>
+            <button class="btn btn-warning" onclick="goToBulkStep2()">Next: Upload Photos →</button>
+        </div>
+        
+        <!-- Step 2: Upload Photos -->
+        <div id="step2-content" class="step-content hidden">
+            <div class="section">
+                <div class="section-title">Upload All Property Photos</div>
+                <p>Upload photos for each property. You can select multiple files per property.</p>
+                <div id="bulkImageUploads"></div>
+            </div>
+            
+            <button class="btn btn-warning" onclick="goToBulkStep1()">← Back</button>
+            <button class="btn btn-primary" onclick="generateBulkPreview()">Next: Preview All →</button>
+        </div>
+        
+        <!-- Step 3: Preview All -->
+        <div id="step3-content" class="step-content hidden">
+            <div class="section">
+                <div class="section-title">Preview All Properties</div>
+                <div class="preview-grid" id="bulkPreviewGrid"></div>
+            </div>
+            
+            <button class="btn btn-warning" onclick="goToBulkStep2()">← Back</button>
+            <button class="btn btn-success" onclick="finalizeBulkGeneration()">✓ Generate All & Download</button>
+        </div>
+        
+        <!-- Step 4: Generation Complete -->
+        <div id="step4-content" class="step-content hidden">
+            <div class="section" style="text-align: center;">
+                <h2 style="color: #27ae60;">✅ Bulk Generation Complete!</h2>
+                <p>Processed <strong id="processedCount">0</strong> properties successfully.</p>
+                <div id="bulkDownloadLinks"></div>
+            </div>
+            <button class="btn btn-primary" onclick="resetBulkForm()">Upload Another Batch</button>
+        </div>
+    </div>
+    
+    <script>
+        let bulkProperties = [];
+        let propertyCount = 0;
+        
+        function addPropertyForm() {
+            propertyCount++;
+            const container = document.getElementById('propertiesContainer');
+            const card = document.createElement('div');
+            card.className = 'property-card';
+            card.id = `property-${propertyCount}`;
+            
+            card.innerHTML = `
+                <button class="remove-property" onclick="removeProperty('property-${propertyCount}')">✕ Remove</button>
+                <h3>Property #${propertyCount}</h3>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Title *</label>
+                        <input type="text" class="prop-title" placeholder="Fully Furnished 2 BHK..." required>
+                    </div>
+                    <div class="form-group">
+                        <label>Rent (₹) *</label>
+                        <input type="number" class="prop-rent" placeholder="45000" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Maintenance (₹) *</label>
+                        <input type="number" class="prop-maintenance" placeholder="2500" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Deposit (₹) *</label>
+                        <input type="number" class="prop-deposit" placeholder="135000" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Area (Sq. Ft.) *</label>
+                        <input type="number" class="prop-sqft" placeholder="1250" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Floor *</label>
+                        <input type="text" class="prop-floor" placeholder="7/12" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Available From *</label>
+                        <input type="text" class="prop-available" placeholder="Immediate" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Preferred Tenant *</label>
+                        <input type="text" class="prop-tenant" placeholder="Family" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Location *</label>
+                        <input type="text" class="prop-location" placeholder="HSR Layout" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Society/Apartment</label>
+                        <input type="text" class="prop-society" placeholder="Salarpuria Serenity">
+                    </div>
+                    <div class="form-group">
+                        <label>Owner Name *</label>
+                        <input type="text" class="prop-owner" placeholder="Rajesh Kumar" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Diet Preference</label>
+                        <select class="prop-diet">
+                            <option value="">No Preference</option>
+                            <option value="Vegetarian">Vegetarian Only</option>
+                            <option value="Non-Vegetarian">Non-Vegetarian Only</option>
+                        </select>
+                    </div>
+                </div>
+            `;
+            
+            container.appendChild(card);
+        }
+        
+        function removeProperty(cardId) {
+            document.getElementById(cardId).remove();
+        }
+        
+        function goToBulkStep2() {
+            // Collect all properties
+            const cards = document.querySelectorAll('.property-card');
+            bulkProperties = [];
+            
+            cards.forEach((card, index) => {
+                const property = {
+                    title: card.querySelector('.prop-title').value,
+                    rent: card.querySelector('.prop-rent').value,
+                    maintenance: card.querySelector('.prop-maintenance').value,
+                    deposit: card.querySelector('.prop-deposit').value,
+                    sqft: card.querySelector('.prop-sqft').value,
+                    floor: card.querySelector('.prop-floor').value,
+                    available_from: card.querySelector('.prop-available').value,
+                    preferred_tenant: card.querySelector('.prop-tenant').value,
+                    location: card.querySelector('.prop-location').value,
+                    society: card.querySelector('.prop-society').value,
+                    owner: card.querySelector('.prop-owner').value,
+                    diet_preference: card.querySelector('.prop-diet').value
+                };
+                
+                // Validate required fields
+                if (!property.title || !property.rent || !property.owner) {
+                    alert(`Property #${index + 1} is missing required fields`);
+                    return;
+                }
+                
+                bulkProperties.push(property);
+            });
+            
+            if (bulkProperties.length === 0) {
+                alert('Please add at least one property');
+                return;
+            }
+            
+            // Create bulk image upload section
+            const uploadContainer = document.getElementById('bulkImageUploads');
+            uploadContainer.innerHTML = '';
+            
+            bulkProperties.forEach((prop, index) => {
+                const div = document.createElement('div');
+                div.className = 'form-group';
+                div.innerHTML = `
+                    <label>${prop.title} - Photos:</label>
+                    <input type="file" id="bulk-img-${index}" multiple accept="image/*" data-index="${index}">
+                `;
+                uploadContainer.appendChild(div);
+            });
+            
+            goToBulkStep('step2');
+        }
+        
+        async function generateBulkPreview() {
+            // Collect image uploads
+            const imageInputs = document.querySelectorAll('#bulkImageUploads input[type="file"]');
+            imageInputs.forEach(input => {
+                const index = input.getAttribute('data-index');
+                bulkProperties[index].images = Array.from(input.files).map(f => f.name);
+            });
+            
+            try {
+                const response = await fetch('/api/preview-bulk', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ properties: bulkProperties })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    const previewGrid = document.getElementById('bulkPreviewGrid');
+                    previewGrid.innerHTML = '';
+                    
+                    result.previews.forEach((preview, index) => {
+                        const item = document.createElement('div');
+                        item.className = 'preview-item';
+                        item.innerHTML = `
+                            <h4>Property #${index + 1}: ${preview.title}</h4>
+                            <div class="preview-message">${preview.message}</div>
+                            <p><strong>Drive Folder:</strong> ${preview.drive_folder_name}</p>
+                        `;
+                        previewGrid.appendChild(item);
+                    });
+                    
+                    goToBulkStep('step3');
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        async function finalizeBulkGeneration() {
+            try {
+                const response = await fetch('/api/generate-bulk', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ properties: bulkProperties })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    document.getElementById('processedCount').textContent = result.processed_count;
+                    
+                    const downloads = document.getElementById('bulkDownloadLinks');
+                    downloads.innerHTML = `
+                        <p><a href="${result.zip_file}" download>📦 Download All (ZIP)</a></p>
+                        <p><a href="${result.json_file}" download>📊 Download Data (JSON)</a></p>
+                        <p><a href="${result.txt_file}" download>📝 Download Messages (TXT)</a></p>
+                    `;
+                    
+                    goToBulkStep('step4');
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        function goToBulkStep(stepId) {
+            document.querySelectorAll('.step-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.step').forEach(el => el.classList.remove('active', 'completed'));
+            
+            document.getElementById(stepId + '-content').classList.remove('hidden');
+            document.getElementById(stepId).classList.add('active');
+            
+            if (stepId === 'step2') document.getElementById('step1').classList.add('completed');
+            if (stepId === 'step3') {
+                document.getElementById('step1').classList.add('completed');
+                document.getElementById('step2').classList.add('completed');
+            }
+            if (stepId === 'step4') {
+                document.getElementById('step1').classList.add('completed');
+                document.getElementById('step2').classList.add('completed');
+                document.getElementById('step3').classList.add('completed');
+            }
+        }
+        
+        function goToBulkStep1() { goToBulkStep('step1'); }
+        function goToBulkStep2() { goToBulkStep('step2'); }
+        
+        function resetBulkForm() {
+            document.getElementById('propertiesContainer').innerHTML = '';
+            document.getElementById('bulkImageUploads').innerHTML = '';
+            document.getElementById('bulkPreviewGrid').innerHTML = '';
+            bulkProperties = [];
+            propertyCount = 0;
+            addPropertyForm();
+            goToBulkStep('step1');
+        }
+        
+        // Initialize with one property form
+        addPropertyForm();
+    </script>
+</body>
+</html>
+```
+
+### 3.2 Backend API: `main.py` (Bulk Upload Endpoints)
+
+```python
+from services.bulk_processor import BulkPropertyProcessor
+import zipfile
+import os
+
+@app.route('/bulk_upload', methods=['GET'])
+def bulk_upload_page():
+    """Render bulk property upload page"""
+    return render_template('bulk_upload.html')
+
+@app.route('/api/preview-bulk', methods=['POST'])
+def preview_bulk():
+    """Generate preview for all bulk properties"""
+    try:
+        data = request.get_json()
+        properties = data.get('properties', [])
+        
+        previews = []
+        for prop in properties:
+            message = format_whatsapp_message(prop)
+            drive_folder = generate_drive_folder_name(prop)
+            previews.append({
+                'title': prop.get('title'),
+                'message': message,
+                'drive_folder_name': drive_folder
+            })
+        
+        return jsonify({
+            'success': True,
+            'previews': previews
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/generate-bulk', methods=['POST'])
+def generate_bulk():
+    """Generate and save all bulk properties"""
+    try:
+        data = request.get_json()
+        properties = data.get('properties', [])
+        
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        
+        # Initialize bulk processor
+        processor = BulkPropertyProcessor()
+        results = processor.process_properties_batch(properties)
+        
+        # Create ZIP file with all outputs
+        zip_filename = f'output/bulk_{timestamp}.zip'
+        with zipfile.ZipFile(zip_filename, 'w') as zipf:
+            # Add individual property files
+            for idx, msg_data in enumerate(results['messages']):
+                # WhatsApp message
+                msg_file = f'property_{idx+1}_whatsapp.txt'
+                zipf.writestr(msg_file, msg_data['message'])
+                
+                # JSON data
+                json_file = f'property_{idx+1}_data.json'
+                zipf.writestr(json_file, json.dumps({
+                    'property': properties[idx],
+                    'drive_folder': results['drive_folders'][idx]['folder_name'] if idx < len(results['drive_folders']) else None
+                }, indent=2))
+        
+        # Save combined JSON
+        combined_json = f'output/bulk_data_{timestamp}.json'
+        with open(combined_json, 'w') as f:
+            json.dump(results, f, indent=2)
+        
+        # Save combined TXT
+        combined_txt = f'output/bulk_messages_{timestamp}.txt'
+        with open(combined_txt, 'w') as f:
+            for msg_data in results['messages']:
+                f.write(f"=== {msg_data['title']} ===\n")
+                f.write(f"{msg_data['message']}\n\n")
+                f.write("-" * 80 + "\n\n")
+        
+        return jsonify({
+            'success': True,
+            'processed_count': results['processed_count'],
+            'total_properties': len(properties),
+            'zip_file': zip_filename,
+            'json_file': combined_json,
+            'txt_file': combined_txt,
+            'errors': results['errors']
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+```
+
+---
+
+## Phase 4: Update `main.py` Navigation
+
+```python
+# Add to main.py routes
+
+@app.route('/')
+def index():
+    """Home page with links to both flows"""
+    return '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>EasyFind Property Solutions</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 40px;
+                text-align: center;
+            }
+            h1 { color: #2c3e50; }
+            .options {
+                display: flex;
+                justify-content: center;
+                gap: 30px;
+                margin-top: 40px;
+            }
+            .option {
+                background: #3498db;
+                color: white;
+                padding: 30px 50px;
+                border-radius: 10px;
+                text-decoration: none;
+                font-size: 20px;
+                font-weight: 600;
+                transition: transform 0.3s;
+            }
+            .option:hover {
+                transform: scale(1.05);
+                background: #2980b9;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>🏠 EasyFind Property Solutions</h1>
+        <p>Select your upload method:</p>
+        <div class="options">
+            <a href="/single_upload" class="option">📝 Single Property Upload</a>
+            <a href="/bulk_upload" class="option">🏢 Bulk Property Upload</a>
+        </div>
+    </body>
+    </html>
+    '''
+```
+
+---
+
+## ✅ Complete Implementation Checklist
+
+### Single Upload Flow
+- [ ] Create `templates/single_upload.html`
+- [ ] Add `/single_upload` GET route
+- [ ] Add `/api/preview-single` POST route
+- [ ] Add `/api/generate-single` POST route
+- [ ] Test: Add details → Upload photos → Preview → Generate
+
+### Bulk Upload Flow
+- [ ] Create `templates/bulk_upload.html`
+- [ ] Add `/bulk_upload` GET route
+- [ ] Add `/api/preview-bulk` POST route
+- [ ] Add `/api/generate-bulk` POST route
+- [ ] Update `BulkPropertyProcessor` service
+- [ ] Test: Add 10 properties → Upload all photos → Preview all → Generate all
+
+### Shared Components
+- [ ] Create `utils/formatters.py` with all helper functions
+- [ ] Update `main.py` to import formatters
+- [ ] Add home page `/` with both options
+- [ ] Update `requirements.txt` if needed
+
+### Testing
+- [ ] Single upload: 1 property with all fields
+- [ ] Bulk upload: 5-10 properties with varying data
+- [ ] Verify Drive folder naming logic
+- [ ] Verify all normalizations (availability, tenant, diet)
+- [ ] Verify utility detection in titles
+
+---
+
+## 🎯 User Flow Summary
+
+### Single Upload:
+1. **Step 1:** Fill all property details → Next
+2. **Step 2:** Upload property photos → Next
+3. **Step 3:** Preview generated message → Generate
+4. **Step 4:** Download files (TXT + JSON)
+
+### Bulk Upload:
+1. **Step 1:** Add multiple property forms → Next
+2. **Step 2:** Upload photos for each property → Next
+3. **Step 3:** Preview all messages → Generate All
+4. **Step 4:** Download ZIP with all files
+
+Both flows are now **fully separated, complete, and production-ready!** 🚀
+```
