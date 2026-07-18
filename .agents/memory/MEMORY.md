@@ -1,0 +1,3 @@
+- [Auth token flow](auth-token-flow.md) — token passed as ?token=VALUE query param everywhere; JS reads it from URL and forwards to all fetch() API calls
+- [WhatsApp formatter rules](whatsapp-formatter-rules.md) — "with Utility" auto-appended, availability normalization, tenant+diet normalization; all in utils/formatters.py
+- [Output file serving](output-file-serving.md) — generated files saved to output/ dir, served via StaticFiles mount at /output/; no auth on static files (obscurity via timestamps)

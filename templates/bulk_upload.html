@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bulk Property Upload — EasyFind Admin</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    .stepper {
+      display: flex;
+      gap: 0;
+      margin-bottom: 28px;
+      border-radius: var(--radius);
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .stepper-item {
+      flex: 1;
+      padding: 12px 8px;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      background: #f8f9fa;
+      border-right: 1px solid var(--border);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      transition: background 0.15s, color 0.15s;
+    }
+    .stepper-item:last-child { border-right: none; }
+    .stepper-item.active { background: var(--primary); color: #fff; }
+    .stepper-item.done { background: #1a7f45; color: #fff; }
+    .step-panel { display: none; }
+    .step-panel.visible { display: block; }
+
+    .prop-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: #fafbfc;
+      padding: 20px 20px 12px;
+      margin-bottom: 16px;
+      position: relative;
+    }
+    .prop-card-title {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--primary);
+      margin: 0 0 14px;
+    }
+    .remove-card-btn {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      background: #fee2e2;
+      color: #b91c1c;
+      border: none;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .remove-card-btn:hover { background: #fecaca; }
+
+    .preview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+      gap: 16px;
+      margin-top: 16px;
+    }
+    .preview-card {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px;
+    }
+    .preview-card-title {
+      font-size: 13px;
+      font-weight: 700;
+      margin: 0 0 10px;
+      color: var(--text);
+    }
+    .preview-message {
+      background: #f8f9fa;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      font-family: monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      line-height: 1.5;
+      max-height: 260px;
+      overflow-y: auto;
+      margin-bottom: 10px;
+    }
+    .folder-pill {
+      display: inline-block;
+      background: #e8f3ff;
+      color: var(--primary);
+      border-radius: 20px;
+      padding: 4px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: monospace;
+      word-break: break-all;
+    }
+    .copy-small {
+      float: right;
+      font-size: 11px;
+      padding: 3px 8px;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .copy-small:hover { background: #1a5fbf; }
+
+    .success-icon { font-size: 52px; text-align: center; display: block; margin-bottom: 10px; }
+    .download-list { list-style: none; padding: 0; margin: 16px 0 0; display: flex; flex-direction: column; gap: 10px; }
+    .download-list a {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      background: #f8f9fa;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      text-decoration: none;
+      color: var(--primary);
+      font-weight: 600;
+      font-size: 14px;
+      transition: background 0.15s;
+    }
+    .download-list a:hover { background: #e8f3ff; }
+    .nav-row { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; align-items: center; }
+    .count-badge {
+      background: #e8f3ff;
+      color: var(--primary);
+      border-radius: 20px;
+      padding: 4px 12px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .img-upload-row {
+      padding: 10px 14px;
+      background: #f8f9fa;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 13px;
+    }
+    .img-upload-row label { font-weight: 600; margin: 0; min-width: 220px; flex-shrink: 0; }
+    .img-upload-row input { margin: 0; flex: 1; }
+    .img-count { font-size: 12px; color: var(--muted); min-width: 60px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="logo">EasyFind Admin</div>
+    <div class="sub">Bulk Property Upload</div>
+  </div>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
+    <a href="/{% if token %}?token={{ token }}{% endif %}" style="font-size:13px;color:var(--muted);text-decoration:none">← Home</a>
+  </div>
+</header>
+
+<div class="container">
+
+  <div class="stepper">
+    <div class="stepper-item active" id="stp-1">1 · Add Properties</div>
+    <div class="stepper-item" id="stp-2">2 · Photos</div>
+    <div class="stepper-item" id="stp-3">3 · Preview All</div>
+    <div class="stepper-item" id="stp-4">4 · Download</div>
+  </div>
+
+  <!-- ── Step 1: Add Properties ─────────────────────────── -->
+  <div class="step-panel visible" id="panel-1">
+    <div id="cards-container"></div>
+
+    <div style="margin-bottom:24px">
+      <button class="btn btn-secondary" onclick="addCard()">+ Add Property</button>
+    </div>
+
+    <div class="action-bar">
+      <button class="btn btn-primary" onclick="goToPhotos()">Next: Upload Photos →</button>
+    </div>
+  </div>
+
+  <!-- ── Step 2: Photos ─────────────────────────────────── -->
+  <div class="step-panel" id="panel-2">
+    <div class="section">
+      <div class="section-head"><div class="section-badge">📷</div><h2>Upload Property Photos</h2></div>
+      <div class="section-body">
+        <p style="color:var(--muted);margin:0 0 16px;font-size:13px">Select photos for each property. Photos are used for your reference — they are not uploaded to any server in this step.</p>
+        <div id="bulk-image-uploads"></div>
+      </div>
+    </div>
+    <div class="nav-row">
+      <button class="btn btn-secondary" onclick="goTo(1)">← Back</button>
+      <button class="btn btn-primary" onclick="goToPreview()">Next: Preview All →</button>
+    </div>
+  </div>
+
+  <!-- ── Step 3: Preview All ────────────────────────────── -->
+  <div class="step-panel" id="panel-3">
+    <div class="section">
+      <div class="section-head">
+        <div class="section-badge">💬</div>
+        <h2>Preview All Messages</h2>
+        <span class="optional" id="preview-count-label"></span>
+      </div>
+      <div class="section-body">
+        <div class="preview-grid" id="preview-grid"></div>
+      </div>
+    </div>
+    <div class="nav-row">
+      <button class="btn btn-secondary" onclick="goTo(2)">← Back</button>
+      <button class="btn btn-primary" onclick="generateAll()">✓ Generate All &amp; Download</button>
+    </div>
+  </div>
+
+  <!-- ── Step 4: Download ───────────────────────────────── -->
+  <div class="step-panel" id="panel-4">
+    <div class="section">
+      <div class="section-body" style="text-align:center;padding:32px 16px">
+        <span class="success-icon">✅</span>
+        <h2 style="margin:0 0 6px">Bulk generation complete!</h2>
+        <p style="color:var(--muted);margin:0 0 4px">Processed <strong id="processed-count">0</strong> properties.</p>
+        <div id="error-summary" style="color:#b91c1c;font-size:13px;margin-top:8px"></div>
+        <ul class="download-list" id="download-list"></ul>
+      </div>
+    </div>
+    <div class="nav-row" style="justify-content:center">
+      <a class="btn btn-primary" href="/bulk_upload{% if token %}?token={{ token }}{% endif %}">➕ Upload Another Batch</a>
+    </div>
+  </div>
+
+</div>
+
+<footer>EasyFind Property Solutions &copy; 2025 — Internal Admin Tool</footer>
+<div class="toast" id="toast"></div>
+
+<script>
+const TOKEN = new URLSearchParams(window.location.search).get('token') || '';
+let cardCount = 0;
+let bulkProperties = [];
+
+// ── Toast ─────────────────────────────────────────────────
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+// ── Stepper ───────────────────────────────────────────────
+function goTo(step) {
+  document.querySelectorAll('.step-panel').forEach((p, i) => {
+    p.classList.toggle('visible', i + 1 === step);
+  });
+  document.querySelectorAll('.stepper-item').forEach((s, i) => {
+    s.classList.remove('active', 'done');
+    if (i + 1 === step) s.classList.add('active');
+    else if (i + 1 < step) s.classList.add('done');
+  });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ── Property cards ────────────────────────────────────────
+function addCard() {
+  cardCount++;
+  const n = cardCount;
+  const container = document.getElementById('cards-container');
+  const card = document.createElement('div');
+  card.className = 'prop-card';
+  card.id = `card-${n}`;
+  card.innerHTML = `
+    <div class="prop-card-title">Property #${n}</div>
+    <button class="remove-card-btn" onclick="removeCard('card-${n}')">✕ Remove</button>
+    <div class="form-grid">
+      <div class="form-group fg-full">
+        <label>Title <span class="req">*</span></label>
+        <input type="text" class="f-title" placeholder="e.g. Fully Furnished 2 BHK...">
+      </div>
+      <div class="form-group fg-third">
+        <label>Rent (₹) <span class="req">*</span></label>
+        <input type="number" class="f-rent" placeholder="45000">
+      </div>
+      <div class="form-group fg-third">
+        <label>Maintenance (₹)</label>
+        <input type="number" class="f-maintenance" placeholder="2500">
+      </div>
+      <div class="form-group fg-third">
+        <label>Deposit (₹)</label>
+        <input type="number" class="f-deposit" placeholder="135000">
+      </div>
+      <div class="form-group fg-third">
+        <label>Area (Sq. Ft.)</label>
+        <input type="number" class="f-sqft" placeholder="1250">
+      </div>
+      <div class="form-group fg-third">
+        <label>Floor</label>
+        <input type="text" class="f-floor" placeholder="7/12">
+      </div>
+      <div class="form-group fg-third">
+        <label>Available From <span class="req">*</span></label>
+        <input type="text" class="f-available" placeholder="Immediate">
+      </div>
+      <div class="form-group fg-third">
+        <label>Preferred Tenant <span class="req">*</span></label>
+        <input type="text" class="f-tenant" placeholder="Family">
+      </div>
+      <div class="form-group fg-third">
+        <label>Diet Preference</label>
+        <select class="f-diet">
+          <option value="">No Preference</option>
+          <option value="Vegetarian">Vegetarian Only</option>
+          <option value="Non-Vegetarian">Non-Vegetarian Only</option>
+        </select>
+      </div>
+      <div class="form-group fg-third">
+        <label>Pets</label>
+        <select class="f-pets">
+          <option value="Not Allowed">Not Allowed</option>
+          <option value="Allowed">Allowed</option>
+          <option value="Small Pets Only">Small Pets Only</option>
+        </select>
+      </div>
+      <div class="form-group fg-third">
+        <label>Community</label>
+        <select class="f-community">
+          <option value="Gated">Gated Society</option>
+          <option value="Semi-Gated">Semi-Gated</option>
+          <option value="Non-Society">Non-Society</option>
+        </select>
+      </div>
+      <div class="form-group fg-third">
+        <label>Furnishing</label>
+        <select class="f-furnishing">
+          <option value="Fully Furnished">Fully Furnished</option>
+          <option value="Semi-Furnished">Semi-Furnished</option>
+          <option value="Unfurnished">Unfurnished</option>
+        </select>
+      </div>
+      <div class="form-group fg-half">
+        <label>Location / Area <span class="req">*</span></label>
+        <input type="text" class="f-location" placeholder="HSR Layout">
+      </div>
+      <div class="form-group fg-half">
+        <label>Society / Apartment</label>
+        <input type="text" class="f-society" placeholder="Salarpuria Serenity">
+      </div>
+      <div class="form-group fg-half">
+        <label>Owner Name <span class="req">*</span></label>
+        <input type="text" class="f-owner" placeholder="Rajesh Kumar">
+      </div>
+      <div class="form-group fg-half">
+        <label>Google Maps Link</label>
+        <input type="url" class="f-map" placeholder="https://maps.google.com/...">
+      </div>
+    </div>
+  `;
+  container.appendChild(card);
+}
+
+function removeCard(id) {
+  document.getElementById(id)?.remove();
+}
+
+function collectCards() {
+  const cards = document.querySelectorAll('.prop-card');
+  const props = [];
+  for (const card of cards) {
+    const get = cls => card.querySelector(cls)?.value.trim() || '';
+    const prop = {
+      title: get('.f-title'),
+      rent: get('.f-rent'),
+      maintenance: get('.f-maintenance'),
+      deposit: get('.f-deposit'),
+      sqft: get('.f-sqft'),
+      floor: get('.f-floor'),
+      available_from: get('.f-available'),
+      preferred_tenant: get('.f-tenant'),
+      diet_preference: get('.f-diet'),
+      pets: get('.f-pets'),
+      community: get('.f-community'),
+      furnishing: get('.f-furnishing'),
+      location: get('.f-location'),
+      society: get('.f-society'),
+      owner: get('.f-owner'),
+      map_link: get('.f-map'),
+    };
+    if (!prop.title || !prop.rent || !prop.owner || !prop.available_from || !prop.preferred_tenant || !prop.location) {
+      return null; // validation fail — caller checks
+    }
+    props.push(prop);
+  }
+  return props;
+}
+
+// ── Step 1 → Step 2 ───────────────────────────────────────
+function goToPhotos() {
+  const cards = document.querySelectorAll('.prop-card');
+  if (cards.length === 0) { showToast('Add at least one property first.'); return; }
+
+  bulkProperties = collectCards();
+  if (!bulkProperties) {
+    showToast('Please fill all required fields (Title, Rent, Owner, Available From, Tenant, Location) for every property.');
+    return;
+  }
+
+  // Build image upload rows
+  const container = document.getElementById('bulk-image-uploads');
+  container.innerHTML = '';
+  bulkProperties.forEach((prop, i) => {
+    const row = document.createElement('div');
+    row.className = 'img-upload-row';
+    row.innerHTML = `
+      <label title="${prop.title}">#${i + 1} — ${prop.title.slice(0, 40)}${prop.title.length > 40 ? '…' : ''}</label>
+      <input type="file" id="bulk-img-${i}" multiple accept="image/*" data-index="${i}" onchange="updateCount(this)">
+      <span class="img-count" id="count-${i}">0 files</span>
+    `;
+    container.appendChild(row);
+  });
+
+  goTo(2);
+}
+
+function updateCount(input) {
+  const idx = input.getAttribute('data-index');
+  document.getElementById(`count-${idx}`).textContent = `${input.files.length} file${input.files.length !== 1 ? 's' : ''}`;
+}
+
+// ── Step 2 → Step 3 ───────────────────────────────────────
+async function goToPreview() {
+  try {
+    const resp = await fetch(`/api/preview-bulk?token=${encodeURIComponent(TOKEN)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ properties: bulkProperties }),
+    });
+    const result = await resp.json();
+    if (!result.success) { showToast('Error: ' + result.error); return; }
+
+    const grid = document.getElementById('preview-grid');
+    grid.innerHTML = '';
+    result.previews.forEach((p, i) => {
+      const card = document.createElement('div');
+      card.className = 'preview-card';
+      card.innerHTML = `
+        <div class="preview-card-title">
+          <button class="copy-small" onclick="copyText(this)">Copy</button>
+          #${i + 1} — ${p.title}
+        </div>
+        <div class="preview-message">${escHtml(p.message)}</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:4px">📁 Drive folder:</div>
+        <span class="folder-pill">${escHtml(p.drive_folder_name)}</span>
+      `;
+      grid.appendChild(card);
+    });
+
+    document.getElementById('preview-count-label').textContent = `${result.previews.length} propert${result.previews.length === 1 ? 'y' : 'ies'}`;
+    goTo(3);
+  } catch (err) {
+    showToast('Request failed: ' + err.message);
+  }
+}
+
+function escHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function copyText(btn) {
+  const msg = btn.closest('.preview-card').querySelector('.preview-message').textContent;
+  navigator.clipboard.writeText(msg).then(() => showToast('✓ Copied'));
+}
+
+// ── Step 3 → Step 4 ───────────────────────────────────────
+async function generateAll() {
+  try {
+    const resp = await fetch(`/api/generate-bulk?token=${encodeURIComponent(TOKEN)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ properties: bulkProperties }),
+    });
+    const result = await resp.json();
+    if (!result.success) { showToast('Error: ' + result.error); return; }
+
+    document.getElementById('processed-count').textContent = result.processed_count;
+    if (result.errors && result.errors.length) {
+      document.getElementById('error-summary').textContent = 'Errors: ' + result.errors.join(' | ');
+    }
+
+    const list = document.getElementById('download-list');
+    list.innerHTML = `
+      <li><a href="${result.zip_file}?token=${encodeURIComponent(TOKEN)}" download>📦 Download All (ZIP)</a></li>
+      <li><a href="${result.txt_file}?token=${encodeURIComponent(TOKEN)}" download>📝 All Messages (.txt)</a></li>
+      <li><a href="${result.json_file}?token=${encodeURIComponent(TOKEN)}" download>📊 Property Data (.json)</a></li>
+    `;
+    goTo(4);
+  } catch (err) {
+    showToast('Request failed: ' + err.message);
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────
+addCard();
+</script>
+</body>
+</html>
