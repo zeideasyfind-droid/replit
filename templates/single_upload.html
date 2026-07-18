@@ -238,10 +238,6 @@
             <input type="text" id="property_name" placeholder="If different from society">
           </div>
           <div class="form-group fg-half">
-            <label for="owner">Owner Name <span class="req">*</span></label>
-            <input type="text" id="owner" placeholder="Rajesh Kumar">
-          </div>
-          <div class="form-group fg-half">
             <label for="gallery_link">Gallery Link (optional)</label>
             <input type="url" id="gallery_link" placeholder="https://drive.google.com/...">
           </div>
@@ -333,80 +329,138 @@ function showToast(msg) {
 // ── Smart Paste (mirrors admin_property.html logic) ───────
 const _mappedSingle = new Set();
 
-function runPasteMapping() {
+async function runPasteMapping() {
   const raw = document.getElementById('raw_paste').value.trim();
   if (!raw) { showToast('Paste some property text first.'); return; }
 
+  const resultEl = document.getElementById('paste-result');
+  resultEl.textContent = 'Analysing…';
+
   const extracted = {};
 
-  // BHK → feeds title auto-generation
+  // BHK
   const bhkM = raw.match(/(\d)\s*(?:bhk|bedroom)/i);
   let bhkStr = '';
-  if (bhkM) { bhkStr = bhkM[1] + ' BHK'; }
+  if (bhkM) bhkStr = bhkM[1] + ' BHK';
 
-  // Price / Rent
+  // Price / Rent (handles comma-formatted numbers)
   const croreM = raw.match(/(?:₹\s*)?(\d+(?:\.\d+)?)\s*(?:cr|crore)/i);
   const lakhM  = raw.match(/(?:₹\s*)?(\d+(?:\.\d+)?)\s*(?:l|lakh|lakhs)/i);
-  const rentM  = raw.match(/(?:₹\s*|rs\.?\s*)(\d[\d,]+)\s*(?:\/\s*(?:month|mon|mo|pm))?/i);
+  const rentM  = raw.match(/(?:₹\s*|rs\.?\s*)([\d,]+)\s*(?:\/\s*(?:month|mon|mo|pm))?/i);
   if (croreM)      extracted.rent = String(Math.round(parseFloat(croreM[1]) * 1e7));
   else if (lakhM)  extracted.rent = String(Math.round(parseFloat(lakhM[1]) * 1e5));
   else if (rentM)  extracted.rent = rentM[1].replace(/,/g, '');
 
-  // Deposit
-  const depositM = raw.match(/deposit[:\s₹]*([0-9,]+)/i);
+  // Deposit (handles comma-formatted)
+  const depositM = raw.match(/deposit[:\s₹]*([\d,]+)/i);
   if (depositM) extracted.deposit = depositM[1].replace(/,/g, '');
 
-  // Maintenance
-  const maintM = raw.match(/maintenance[:\s₹]*([0-9,]+)/i);
+  // Maintenance (handles comma-formatted)
+  const maintM = raw.match(/maintenance[:\s₹]*([\d,]+)/i);
   if (maintM) extracted.maintenance = maintM[1].replace(/,/g, '');
 
-  // Area → sqft
-  const areaM = raw.match(/(\d+(?:\.\d+)?)\s*(?:sqft|sq\.?\s*ft|square\s*feet)/i);
-  if (areaM) extracted.sqft = areaM[1];
+  // Area → sqft (handles "1,280 sq ft", "1280sqft", "1280 square feet")
+  const areaM = raw.match(/([\d,]+(?:\.\d+)?)\s*(?:sqft|sq\.?\s*ft\.?|square\s*feet)/i);
+  if (areaM) extracted.sqft = areaM[1].replace(/,/g, '');
 
   // Floor
   const floorM = raw.match(/(\d+)(?:st|nd|rd|th)?\s*floor/i);
   if (floorM) extracted.floor = floorM[1];
 
-  // Furnishing (select values must match exactly)
-  if (/fully\s*furnished/i.test(raw))      extracted.furnishing = 'Fully Furnished';
-  else if (/semi\s*furnished/i.test(raw))  extracted.furnishing = 'Semi-Furnished';
-  else if (/unfurnished/i.test(raw))       extracted.furnishing = 'Unfurnished';
+  // Furnishing / Permission status
+  // "semi permitted" / "semi furnished" → Semi-Furnished
+  // "fully furnished" / "fully permitted" → Fully Furnished
+  if (/fully\s*(?:furnished|permitted)/i.test(raw))           extracted.furnishing = 'Fully Furnished';
+  else if (/semi[\s-]*(?:furnished|permitted)/i.test(raw))    extracted.furnishing = 'Semi-Furnished';
+  else if (/unfurnished|bare[\s-]*shell/i.test(raw))          extracted.furnishing = 'Unfurnished';
 
-  // Availability → available_from
-  if (/ready\s*to\s*move|immediate|vacant|available\s*now/i.test(raw)) extracted.available_from = 'Immediate';
-  else {
-    // Try to pull a date like "available from Jan 2025" or "available from 2025-02-01"
-    const dateM = raw.match(/available\s*(?:from)?\s*((?:\d{4}-\d{2}-\d{2}|\w+\s+\d{4}))/i);
-    if (dateM) extracted.available_from = dateM[1];
+  // Availability: past/current → "Immediate"; future → keep the date string
+  if (/ready\s*to\s*(?:move|occupy)|immediate|vacant|available\s*now/i.test(raw)) {
+    extracted.available_from = 'Immediate';
+  } else {
+    const mo = 'jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?';
+    const datePatterns = [
+      /available\s*(?:from)?\s*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i,
+      new RegExp(`available\\s*(?:from)?\\s*(\\d{1,2}\\s*(?:${mo})\\s*\\d{2,4})`, 'i'),
+      new RegExp(`(?:from|after)\\s*((?:${mo})\\s+\\d{4})`, 'i'),
+      /(\d{4}-\d{2}-\d{2})/,
+    ];
+    for (const pat of datePatterns) {
+      const m = raw.match(pat);
+      if (m) {
+        const d = new Date(m[1]);
+        extracted.available_from = (!isNaN(d) && d <= new Date()) ? 'Immediate' : m[1].trim();
+        break;
+      }
+    }
   }
 
-  // Google Maps URL → map_link
+  // Google Maps URL → map_link (then geocode below)
   const mapsM = raw.match(/https?:\/\/(?:maps\.google\.com|goo\.gl\/maps|maps\.app\.goo\.gl|www\.google\.com\/maps)[^\s]*/i);
   if (mapsM) extracted.map_link = mapsM[0];
 
-  // Image URLs → gallery_link (first image URL as gallery hint if present)
+  // Image URLs → gallery_link hint
   const imgUrls = raw.match(/https?:\/\/[^\s]+\.(?:jpg|jpeg|png|webp)/gi);
   if (imgUrls && imgUrls.length) extracted.gallery_link = imgUrls[0];
 
-  // City → location field
-  const cities = ['bengaluru','bangalore','mumbai','delhi','hyderabad','chennai','pune','kolkata','ahmedabad','surat','jaipur','noida','gurgaon','gurugram'];
-  const cityFound = cities.find(c => raw.toLowerCase().includes(c));
-  if (cityFound) {
-    const cityMap = {'bangalore':'Bengaluru','gurugram':'Gurgaon'};
-    extracted.location = cityMap[cityFound] || (cityFound.charAt(0).toUpperCase() + cityFound.slice(1));
+  // Location / locality — explicit patterns first, city list fallback
+  const localityPatterns = [
+    /(?:located?\s+(?:in|at)|location\s*[:–\-]|area\s*[:–\-]|locality\s*[:–\-])\s*([A-Za-z][a-zA-Z\s]{2,30}?)(?:,|\.|\n|bangalore|bengaluru|mumbai|delhi|hyderabad|chennai|pune|$)/i,
+    /\bin\s+([A-Z][a-zA-Z\s]{2,25}?)\s+(?:bangalore|bengaluru|mumbai|delhi|hyderabad|chennai|pune)/i,
+  ];
+  for (const pat of localityPatterns) {
+    const m = raw.match(pat);
+    if (m && m[1].trim().length > 2) { extracted.location = m[1].trim(); break; }
+  }
+  if (!extracted.location) {
+    const cities = ['bengaluru','bangalore','mumbai','delhi','hyderabad','chennai','pune','kolkata','ahmedabad','surat','jaipur','noida','gurgaon','gurugram'];
+    const cityFound = cities.find(c => raw.toLowerCase().includes(c));
+    if (cityFound) {
+      const cityAliases = { bangalore: 'Bengaluru', gurugram: 'Gurgaon' };
+      extracted.location = cityAliases[cityFound] || (cityFound[0].toUpperCase() + cityFound.slice(1));
+    }
+  }
+
+  // Society / apartment name from text
+  const societyPatterns = [
+    /(?:society|apartment|complex|building|tower|residences|residency|project)\s*[:–\-]\s*([A-Za-z][a-zA-Z\s]{3,40}?)(?:,|\.|\n|$)/i,
+    /\bat\s+([A-Z][a-zA-Z\s]{3,40}?)\s+(?:society|apartment|residences|towers|residency)/i,
+    /([A-Z][a-zA-Z\s]{3,40}?)\s+(?:Society|Apartment|Residences|Towers|Residency)\b/,
+  ];
+  for (const pat of societyPatterns) {
+    const m = raw.match(pat);
+    if (m) { extracted.society = m[1].trim(); break; }
   }
 
   // Preferred tenant
-  if (/\bfamily|families\b/i.test(raw) && /working|professional/i.test(raw)) extracted.preferred_tenant = 'Family / Working Professionals';
-  else if (/\bfamily|families\b/i.test(raw)) extracted.preferred_tenant = 'Family';
+  if (/\b(?:family|families)\b/i.test(raw) && /working|professional/i.test(raw)) extracted.preferred_tenant = 'Family / Working Professionals';
+  else if (/\b(?:family|families)\b/i.test(raw)) extracted.preferred_tenant = 'Family';
   else if (/working|professional/i.test(raw)) extracted.preferred_tenant = 'Working Professionals';
 
-  // Auto-generate title if title is empty and we have BHK + location clue
+  // Auto-generate title if empty
   if (!document.getElementById('title').value && bhkStr) {
     const loc = extracted.location || '';
-    if (loc) extracted.title = `${bhkStr} Property • ${loc}`;
-    else     extracted.title = `${bhkStr} Property`;
+    extracted.title = loc ? `${bhkStr} Property • ${loc}` : `${bhkStr} Property`;
+  }
+
+  // Geocode Maps URL via backend → overrides/fills location + society
+  if (extracted.map_link) {
+    try {
+      const geo = await fetch('/api/geocode-location', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ maps_url: extracted.map_link }),
+      });
+      const gd = await geo.json();
+      if (gd.success) {
+        // Place name (building/society) from URL → society field
+        if (gd.place_name && !extracted.society) extracted.society = gd.place_name;
+        if (gd.establishment && !extracted.society) extracted.society = gd.establishment;
+        // Locality from geocoding → location field (prefer geocoded over regex)
+        if (gd.locality) extracted.location = gd.locality;
+        else if (gd.city && !extracted.location) extracted.location = gd.city;
+      }
+    } catch (_) { /* non-blocking */ }
   }
 
   // Field ID map: extracted key → form element ID
@@ -414,7 +468,8 @@ function runPasteMapping() {
     title: 'title', rent: 'rent', maintenance: 'maintenance',
     deposit: 'deposit', sqft: 'sqft', floor: 'floor',
     furnishing: 'furnishing', available_from: 'available_from',
-    map_link: 'map_link', gallery_link: 'gallery_link', location: 'location',
+    map_link: 'map_link', gallery_link: 'gallery_link',
+    location: 'location', society: 'society', property_name: 'property_name',
     preferred_tenant: 'preferred_tenant',
   };
 
@@ -423,14 +478,13 @@ function runPasteMapping() {
     const id = fieldMap[key];
     if (!id) return;
     const el = document.getElementById(id);
-    if (!el || el.value) return; // don't overwrite already-filled fields
+    if (!el || el.value) return; // never overwrite already-filled fields
     el.value = val;
     el.style.background = '#fffbe6';
     _mappedSingle.add(id);
     applied.push(key);
   });
 
-  const resultEl = document.getElementById('paste-result');
   if (applied.length) {
     resultEl.textContent = `✓ Mapped: ${applied.join(', ')}`;
     showToast(`✓ Mapped ${applied.length} field${applied.length > 1 ? 's' : ''}`);
@@ -482,7 +536,6 @@ function collectData() {
     location: document.getElementById('location').value.trim(),
     society: document.getElementById('society').value.trim(),
     property_name: document.getElementById('property_name').value.trim(),
-    owner: document.getElementById('owner').value.trim(),
     gallery_link: document.getElementById('gallery_link').value.trim(),
     map_link: document.getElementById('map_link').value.trim(),
   };
@@ -491,7 +544,7 @@ function collectData() {
 // ── Step 1 → Step 2 ───────────────────────────────────────
 function goToPhotos() {
   const d = collectData();
-  const required = ['title','rent','maintenance','deposit','sqft','floor','available_from','preferred_tenant','location','owner'];
+  const required = ['title','rent','maintenance','deposit','sqft','floor','available_from','preferred_tenant','location'];
   for (const key of required) {
     if (!d[key]) {
       showToast(`Please fill in: ${key.replace(/_/g, ' ')}`);

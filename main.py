@@ -1,8 +1,10 @@
 import os
+import re as _re
 import json
 import logging
 import sys
 from typing import List, Optional
+from urllib.parse import unquote_plus
 
 from fastapi import FastAPI, Request, UploadFile, File, Form, Depends, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -418,6 +420,71 @@ async def api_generate_bulk(request: Request):
         })
     except Exception as exc:
         logger.error("[generate-bulk] %s", exc)
+        return JSONResponse({"success": False, "error": str(exc)}, status_code=500)
+
+
+# ── Geocode Maps URL ──────────────────────────────────────────────────────────
+
+@app.post("/api/geocode-location")
+async def api_geocode_location(request: Request):
+    """Resolve a Google Maps URL, extract place name + coords, reverse-geocode via Maps API."""
+    try:
+        body = await request.json()
+        maps_url = body.get("maps_url", "").strip()
+        if not maps_url:
+            return JSONResponse({"success": False, "error": "No Maps URL provided"}, status_code=400)
+
+        result: dict = {}
+        headers = {"User-Agent": "Mozilla/5.0 (compatible; EasyFindAdmin/1.0)"}
+
+        # Follow redirects to get the canonical Maps URL
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            resp = await client.get(maps_url, headers=headers)
+            final_url = str(resp.url)
+        logger.info("[geocode-location] Resolved URL: %s", final_url[:120])
+
+        # Extract place name from URL path  e.g. /maps/place/Salarpuria+Sattva+.../@lat,lng
+        place_m = _re.search(r"/maps/place/([^/@?&]+)", final_url)
+        if place_m:
+            place_name = unquote_plus(place_m.group(1).replace("+", " ")).strip()
+            if place_name and place_name.lower() not in ("", "place"):
+                result["place_name"] = place_name
+
+        # Extract coordinates (@lat,lng or !3d{lat}!4d{lng})
+        coord_m = _re.search(r"@(-?\d+\.\d+),(-?\d+\.\d+)", final_url)
+        if not coord_m:
+            coord_m = _re.search(r"!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)", final_url)
+
+        if coord_m and GOOGLE_MAPS_API_KEY:
+            lat, lng = coord_m.group(1), coord_m.group(2)
+            result["lat"] = lat
+            result["lng"] = lng
+            async with httpx.AsyncClient(timeout=10.0) as gc:
+                geo = await gc.get(
+                    "https://maps.googleapis.com/maps/api/geocode/json",
+                    params={"latlng": f"{lat},{lng}", "key": GOOGLE_MAPS_API_KEY},
+                )
+            geo_data = geo.json()
+            logger.info("[geocode-location] Geocode status: %s", geo_data.get("status"))
+            if geo_data.get("status") == "OK" and geo_data.get("results"):
+                for comp in geo_data["results"][0].get("address_components", []):
+                    types = comp.get("types", [])
+                    if ("sublocality_level_1" in types or "sublocality" in types) and "locality" not in result:
+                        result["locality"] = comp["long_name"]
+                    elif "locality" in types:
+                        result["city"] = comp["long_name"]
+                    elif "administrative_area_level_1" in types:
+                        result["state"] = comp["long_name"]
+                # Establishment name from first result (e.g. apartment complex)
+                first = geo_data["results"][0]
+                if any(t in first.get("types", []) for t in ("establishment", "premise", "point_of_interest")):
+                    estab = first.get("formatted_address", "").split(",")[0].strip()
+                    if estab:
+                        result["establishment"] = estab
+
+        return JSONResponse({"success": True, **result})
+    except Exception as exc:
+        logger.error("[geocode-location] %s", exc)
         return JSONResponse({"success": False, "error": str(exc)}, status_code=500)
 
 
