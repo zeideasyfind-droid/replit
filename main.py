@@ -73,20 +73,18 @@ GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "")
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 @app.get("/", response_class=HTMLResponse)
-async def root(request: Request, _: None = Depends(verify_admin)):
-    token = request.query_params.get("token", "")
+async def root(request: Request):
     return templates.TemplateResponse(
         "home.html",
-        {"request": request, "token": token, "mock_mode": MOCK_MODE},
+        {"request": request, "mock_mode": MOCK_MODE},
     )
 
 
 @app.get("/admin/property", response_class=HTMLResponse)
-async def admin_property_form(request: Request, _: None = Depends(verify_admin)):
-    token = request.query_params.get("token", "")
+async def admin_property_form(request: Request):
     return templates.TemplateResponse(
         "admin_property.html",
-        {"request": request, "token": token, "mock_mode": MOCK_MODE},
+        {"request": request, "mock_mode": MOCK_MODE},
     )
 
 
@@ -295,11 +293,10 @@ async def health():
 # ── Single Upload Flow ────────────────────────────────────────────────────────
 
 @app.get("/single_upload", response_class=HTMLResponse)
-async def single_upload_page(request: Request, _: None = Depends(verify_admin)):
-    token = request.query_params.get("token", "")
+async def single_upload_page(request: Request):
     return templates.TemplateResponse(
         "single_upload.html",
-        {"request": request, "token": token},
+        {"request": request},
     )
 
 
@@ -348,11 +345,10 @@ async def api_generate_single(request: Request, _: None = Depends(verify_admin))
 # ── Bulk Upload Flow ──────────────────────────────────────────────────────────
 
 @app.get("/bulk_upload", response_class=HTMLResponse)
-async def bulk_upload_page(request: Request, _: None = Depends(verify_admin)):
-    token = request.query_params.get("token", "")
+async def bulk_upload_page(request: Request):
     return templates.TemplateResponse(
         "bulk_upload.html",
-        {"request": request, "token": token},
+        {"request": request},
     )
 
 

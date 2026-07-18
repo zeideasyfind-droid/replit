@@ -23,7 +23,7 @@ author = "agent"
 
 [workflows.workflow.metadata]
 outputType = "webview"
-previewUrl = "/?token=Easyfind%402025"
+previewUrl = "/"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
