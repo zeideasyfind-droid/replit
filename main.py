@@ -12,7 +12,13 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from utils.auth import verify_admin
-from utils.formatters import format_whatsapp_message, generate_drive_folder_name
+from utils.formatters import (
+    format_whatsapp_message, 
+    generate_drive_folder_name, 
+    canonical_normalize_property,
+    render_meta_title,
+    render_meta_description
+)
 from services.cloudinary_service import upload_images
 from services.meta_catalog_service import create_or_update_catalog_item, get_debug_info
 from services.whatsapp_service import send_confirmation
@@ -232,7 +238,14 @@ async def admin_property_submit(
         "all_image_urls": all_image_urls,
     }
 
-    # ── 4. Meta catalog creation ───────────────────────────────────────────────
+    # ── 4. Canonical Normalization & Meta catalog creation ────────────────────
+    # Normalize data for consistent output across all channels
+    norm_prop = canonical_normalize_property(property_data)
+    
+    # Override title and description for Meta Catalog
+    property_data["title"] = render_meta_title(norm_prop)
+    property_data["description"] = render_meta_description(norm_prop)
+    
     meta_response = None
     meta_error = None
     if MOCK_MODE:

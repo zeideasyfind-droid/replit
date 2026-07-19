@@ -230,12 +230,8 @@
             <input type="text" id="location" placeholder="HSR Layout">
           </div>
           <div class="form-group fg-half">
-            <label for="society">Society / Apartment Name</label>
-            <input type="text" id="society" placeholder="Salarpuria Serenity">
-          </div>
-          <div class="form-group fg-half">
-            <label for="property_name">Property Name</label>
-            <input type="text" id="property_name" placeholder="If different from society">
+            <label for="property_name">Property Name <span class="req">*</span></label>
+            <input type="text" id="property_name" placeholder="e.g. Salarpuria Serenity">
           </div>
           <div class="form-group fg-half">
             <label for="gallery_link">Gallery Link (optional)</label>
@@ -429,7 +425,7 @@ async function runPasteMapping() {
   ];
   for (const pat of societyPatterns) {
     const m = raw.match(pat);
-    if (m) { extracted.society = m[1].trim(); break; }
+    if (m) { extracted.property_name = m[1].trim(); break; }
   }
 
   // Preferred tenant
@@ -453,9 +449,9 @@ async function runPasteMapping() {
       });
       const gd = await geo.json();
       if (gd.success) {
-        // Place name (building/society) from URL → society field
-        if (gd.place_name && !extracted.society) extracted.society = gd.place_name;
-        if (gd.establishment && !extracted.society) extracted.society = gd.establishment;
+        // Place name (building/society) from URL → property_name field
+        if (gd.place_name && !extracted.property_name) extracted.property_name = gd.place_name;
+        if (gd.establishment && !extracted.property_name) extracted.property_name = gd.establishment;
         // Locality from geocoding → location field (prefer geocoded over regex)
         if (gd.locality) extracted.location = gd.locality;
         else if (gd.city && !extracted.location) extracted.location = gd.city;
@@ -469,7 +465,7 @@ async function runPasteMapping() {
     deposit: 'deposit', sqft: 'sqft', floor: 'floor',
     furnishing: 'furnishing', available_from: 'available_from',
     map_link: 'map_link', gallery_link: 'gallery_link',
-    location: 'location', society: 'society', property_name: 'property_name',
+    location: 'location', property_name: 'property_name',
     preferred_tenant: 'preferred_tenant',
   };
 
@@ -534,7 +530,6 @@ function collectData() {
     pets: document.getElementById('pets').value,
     community: document.getElementById('community').value,
     location: document.getElementById('location').value.trim(),
-    society: document.getElementById('society').value.trim(),
     property_name: document.getElementById('property_name').value.trim(),
     gallery_link: document.getElementById('gallery_link').value.trim(),
     map_link: document.getElementById('map_link').value.trim(),

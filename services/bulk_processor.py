@@ -1,7 +1,12 @@
 import logging
 from typing import Any, Dict, List
 
-from utils.formatters import format_whatsapp_message, generate_drive_folder_name
+from utils.formatters import (
+    format_whatsapp_message, 
+    generate_drive_folder_name, 
+    canonical_normalize_property,
+    render_meta_title
+)
 
 logger = logging.getLogger(__name__)
 
@@ -15,8 +20,10 @@ class BulkPropertyProcessor:
         errors = []
 
         for i, prop in enumerate(properties):
-            label = prop.get("title") or f"Property {i + 1}"
             try:
+                norm_prop = canonical_normalize_property(prop)
+                label = render_meta_title(norm_prop) or prop.get("title") or f"Property {i + 1}"
+                
                 message = format_whatsapp_message(prop)
                 folder_name = generate_drive_folder_name(prop)
                 messages.append({"title": label, "message": message})

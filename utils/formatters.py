@@ -53,96 +53,205 @@ def normalize_tenant_preference(tenant_str, diet_pref=None):
     return result
 
 
-def format_title_with_utility(title, property_details):
-    """Add 'with Utility' to title if fully furnished 2 BHK with 2 bathrooms & balcony."""
-    furnishing = property_details.get("furnishing", "").lower()
-
-    if (
-        "fully furnished" in furnishing
-        and "2 bhk" in title.lower()
-        and "2 bath" in title.lower()
-        and "balcony" in title.lower()
-    ):
-        return title + " with Utility"
-
-    return title
-
-
-def generate_drive_folder_name(property_details):
+def canonical_normalize_property(raw_data):
     """
-    Generate Drive folder name following EasyFind format:
-    EFF-{numeric}-{society/apt OR location-owner}
+    Returns a stable, normalized property object.
+    Unifies Society/Apartment Name into Property Name.
+    Normalizes location based on micro-location preference.
     """
-    society = property_details.get("society", "").strip()
-    apartment = property_details.get("apartment", "").strip()
-    location = property_details.get("location", "").strip()
-    owner = property_details.get("owner", "Unknown").strip()
-    property_name = property_details.get("property_name", "").strip()
-    community_type = property_details.get("community", "Gated").lower()
+    # 1. Handle Property Name (unify Society/Apartment)
+    property_name = (
+        raw_data.get("property_name") or 
+        raw_data.get("society") or 
+        raw_data.get("apartment") or 
+        raw_data.get("building_name") or 
+        ""
+    ).strip()
 
-    numeric_id = str(random.randint(100, 999))
+    # 2. Location Normalization
+    # Preference: micro-location (locality) if informative, else full location
+    locality = raw_data.get("locality", "").strip()
+    location_field = raw_data.get("location", "").strip()
+    
+    # Use locality if it's present and looks like a micro-location
+    # If locality is empty, fallback to location_field
+    normalized_location = locality if locality else location_field
 
-    if society or apartment:
-        base_name = society if society else apartment
-        folder_name = f"EFF-{numeric_id}-{base_name}"
-    elif property_name:
-        folder_name = f"EFF-{numeric_id}-{property_name}-{owner}"
-    elif community_type in ("semi-gated", "non-society", "non-gated"):
-        folder_name = f"EFF-{numeric_id}-{location}-{owner}"
+    # 3. Basic Fields
+    bhk = str(raw_data.get("bhk", "")).upper().strip()
+    if bhk and "BHK" not in bhk:
+        bhk = f"{bhk} BHK"
+        
+    furnishing = raw_data.get("furnishing", "Semi-Furnished").strip()
+    # Standardize furnishing strings
+    if "fully" in furnishing.lower():
+        furnishing = "Fully Furnished"
+    elif "semi" in furnishing.lower():
+        furnishing = "Semi-Furnished"
+    elif "unfurnished" in furnishing.lower():
+        furnishing = "Unfurnished"
+
+    return {
+        "property_id": raw_data.get("property_id", ""),
+        "property_name": property_name,
+        "location": normalized_location,
+        "city": raw_data.get("city", "").strip(),
+        "bhk": bhk,
+        "rent": raw_data.get("rent", "N/A"),
+        "maintenance": raw_data.get("maintenance", "N/A"),
+        "deposit": raw_data.get("deposit", "N/A"),
+        "sqft": raw_data.get("sqft", "N/A"),
+        "floor": raw_data.get("floor", "N/A"),
+        "furnishing": furnishing,
+        "bathrooms": raw_data.get("bathrooms", "").strip(),
+        "balcony": raw_data.get("balcony", "").strip(),
+        "utility": raw_data.get("utility", "").strip(),
+        "available_from": normalize_availability(raw_data.get("available_from", "")),
+        "preferred_tenant": normalize_tenant_preference(
+            raw_data.get("preferred_tenant", "Anyone"),
+            raw_data.get("diet_preference", "")
+        ),
+        "pets": raw_data.get("pets", "Not Allowed"),
+        "community": raw_data.get("community", "Gated"),
+        "gallery_link": raw_data.get("gallery_link", ""),
+        "map_link": raw_data.get("map_link", ""),
+        "description": raw_data.get("description", ""),
+    }
+
+
+def render_meta_title(norm_prop):
+    """
+    Meta Catalogue title: structured and concise.
+    Example: Semi Furnished | 2BHK | Varthur
+    """
+    parts = []
+    if norm_prop["furnishing"]:
+        parts.append(norm_prop["furnishing"])
+    if norm_prop["bhk"]:
+        parts.append(norm_prop["bhk"].replace(" ", ""))
+    if norm_prop["location"]:
+        parts.append(norm_prop["location"])
+    
+    return " | ".join(parts)
+
+
+def render_whatsapp_title(norm_prop):
+    """
+    WhatsApp title: human-readable and descriptive.
+    Example: Semi-Furnished 2 BHK, 2 Bathrooms, 2 Balconies & Utility
+    """
+    title_parts = []
+    if norm_prop["furnishing"]:
+        title_parts.append(norm_prop["furnishing"])
+    if norm_prop["bhk"]:
+        title_parts.append(norm_prop["bhk"])
+    
+    base_title = " ".join(title_parts)
+    
+    extras = []
+    if norm_prop["bathrooms"]:
+        val = norm_prop["bathrooms"]
+        suffix = "Bathrooms" if val != "1" else "Bathroom"
+        extras.append(f"{val} {suffix}")
+    
+    if norm_prop["balcony"]:
+        val = norm_prop["balcony"]
+        suffix = "Balconies" if val != "1" else "Balcony"
+        extras.append(f"{val} {suffix}")
+        
+    if norm_prop["utility"]:
+        # If utility is just a flag or text, handle accordingly
+        u = norm_prop["utility"].lower()
+        if u in ("yes", "true", "1", "available", "utility"):
+            extras.append("Utility")
+        elif u not in ("no", "false", "0", "none", ""):
+            extras.append(norm_prop["utility"])
+
+    if not extras:
+        return base_title
+    
+    if len(extras) > 1:
+        return f"{base_title}, {', '.join(extras[:-1])} & {extras[-1]}"
     else:
-        folder_name = f"EFF-{numeric_id}-{location}-{owner}"
-
-    folder_name = re.sub(r"[^a-zA-Z0-9\s\-]", "", folder_name)
-    folder_name = re.sub(r"\s+", " ", folder_name).strip()
-    return folder_name
+        return f"{base_title}, {extras[0]}"
 
 
-def format_whatsapp_message(property_details):
-    """Format a single property into WhatsApp message format."""
-    title = format_title_with_utility(
-        property_details.get("title", ""),
-        property_details,
-    )
+def render_meta_description(norm_prop):
+    """
+    Meta Catalogue description: line-by-line structured description.
+    """
+    lines = [
+        render_meta_title(norm_prop),
+        f"Price: ₹{norm_prop['rent']}",
+        f"Maintenance: ₹{norm_prop['maintenance']}",
+        f"Deposit: ₹{norm_prop['deposit']}",
+        f"Area: {norm_prop['sqft']} Sq. Ft.",
+        f"Floor: {norm_prop['floor']}",
+        f"Furnishing: {norm_prop['furnishing']}",
+        f"Available From: {norm_prop['available_from']}",
+        f"Preferred Tenant: {norm_prop['preferred_tenant']}",
+        f"Pets: {norm_prop['pets']}",
+        f"Community: {norm_prop['community']}",
+        f"Location: {norm_prop['location']}, {norm_prop['city']}",
+    ]
+    
+    if norm_prop["property_name"]:
+        lines.append(f"Society: {norm_prop['property_name']}")
+        
+    if norm_prop["map_link"]:
+        lines.append("")
+        lines.append(f"📍 Map: {norm_prop['map_link']}")
+        
+    return "\n".join(lines)
 
-    available_from = normalize_availability(property_details.get("available_from", ""))
-    preferred_tenant = normalize_tenant_preference(
-        property_details.get("preferred_tenant", "Anyone"),
-        property_details.get("diet_preference", ""),
-    )
 
-    rent = property_details.get("rent", "N/A")
-    maintenance = property_details.get("maintenance", "N/A")
-    deposit = property_details.get("deposit", "N/A")
-    sqft = property_details.get("sqft", "N/A")
-    floor_ = property_details.get("floor", "N/A")
-    pets = property_details.get("pets", "Not Allowed")
-    community = property_details.get("community", "Gated")
-    location = property_details.get("location", "N/A")
-    gallery_link = property_details.get("gallery_link", "")
-    map_link = property_details.get("map_link", "")
-    prop_display = property_details.get("property_name") or property_details.get("society") or "N/A"
+def format_whatsapp_message(raw_data):
+    """Format a single property into WhatsApp message format using canonical normalizer."""
+    norm_prop = canonical_normalize_property(raw_data)
+    title = render_whatsapp_title(norm_prop)
 
     lines = [
         f"*{title}*",
         "",
-        f"Rent: ₹{rent}",
-        f"Maintenance: ₹{maintenance}",
-        f"Deposit: ₹{deposit}",
-        f"Area: {sqft} Sq. Ft.",
-        f"Floor: {floor_}",
-        f"Available From: {available_from}",
-        f"Preferred Tenant: {preferred_tenant}",
-        f"Pets: {pets}",
-        f"Community: {community}",
-        f"Location: *{location}*",
+        f"Rent: ₹{norm_prop['rent']}",
+        f"Maintenance: ₹{norm_prop['maintenance']}",
+        f"Deposit: ₹{norm_prop['deposit']}",
+        f"Area: {norm_prop['sqft']} Sq. Ft.",
+        f"Floor: {norm_prop['floor']}",
+        f"Available From: {norm_prop['available_from']}",
+        f"Preferred Tenant: {norm_prop['preferred_tenant']}",
+        f"Pets: {norm_prop['pets']}",
+        f"Community: {norm_prop['community']}",
+        f"Location: *{norm_prop['location']}*",
     ]
 
-    if gallery_link:
-        lines += ["", f"📸 *Gallery:* {gallery_link}"]
+    if norm_prop["gallery_link"]:
+        lines += ["", f"📸 *Gallery:* {norm_prop['gallery_link']}"]
 
-    lines += ["", f"*{prop_display}*"]
+    if norm_prop["property_name"]:
+        lines += ["", f"*{norm_prop['property_name']}*"]
 
-    if map_link:
-        lines.append(f"📍 Map: {map_link}")
+    if norm_prop["map_link"]:
+        lines.append(f"📍 Map: {norm_prop['map_link']}")
 
     return "\n".join(lines)
+
+
+def generate_drive_folder_name(raw_data):
+    """
+    Generate Drive folder name following EasyFind format:
+    EFF-{numeric}-{property_name OR location}
+    """
+    norm_prop = canonical_normalize_property(raw_data)
+    
+    numeric_id = str(random.randint(100, 999))
+    
+    if norm_prop["property_name"]:
+        base_name = norm_prop["property_name"]
+    else:
+        base_name = norm_prop["location"]
+
+    folder_name = f"EFF-{numeric_id}-{base_name}"
+    folder_name = re.sub(r"[^a-zA-Z0-9\s\-]", "", folder_name)
+    folder_name = re.sub(r"\s+", " ", folder_name).strip()
+    return folder_name

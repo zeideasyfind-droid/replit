@@ -365,8 +365,8 @@ function addCard() {
         <input type="text" class="f-location" placeholder="HSR Layout">
       </div>
       <div class="form-group fg-half">
-        <label>Society / Apartment</label>
-        <input type="text" class="f-society" placeholder="Salarpuria Serenity">
+        <label>Property Name</label>
+        <input type="text" class="f-property-name" placeholder="Salarpuria Serenity">
       </div>
       <div class="form-group fg-half">
         <label>Google Maps Link</label>
@@ -400,12 +400,9 @@ function collectCards() {
       community: get('.f-community'),
       furnishing: get('.f-furnishing'),
       location: get('.f-location'),
-      society: get('.f-society'),
+      property_name: get('.f-property-name'),
       map_link: get('.f-map'),
     };
-    if (!prop.title || !prop.rent || !prop.available_from || !prop.preferred_tenant || !prop.location) {
-      return null; // validation fail — caller checks
-    }
     props.push(prop);
   }
   return props;
@@ -413,41 +410,50 @@ function collectCards() {
 
 // ── Step 1 → Step 2 ───────────────────────────────────────
 function goToPhotos() {
-  const cards = document.querySelectorAll('.prop-card');
-  if (cards.length === 0) { showToast('Add at least one property first.'); return; }
-
-  bulkProperties = collectCards();
-  if (!bulkProperties) {
-    showToast('Please fill all required fields (Title, Rent, Available From, Tenant, Location) for every property.');
-    return;
+  const props = collectCards();
+  if (props.length === 0) { showToast('Add at least one property.'); return; }
+  
+  const required = ['title', 'rent', 'available_from', 'preferred_tenant', 'location'];
+  for (let i = 0; i < props.length; i++) {
+    for (const req of required) {
+      if (!props[i][req]) {
+        showToast(`Property #${i+1} is missing: ${req}`);
+        return;
+      }
+    }
   }
 
-  // Build image upload rows
-  const container = document.getElementById('bulk-image-uploads');
-  container.innerHTML = '';
-  bulkProperties.forEach((prop, i) => {
+  bulkProperties = props;
+  const uploadContainer = document.getElementById('bulk-image-uploads');
+  uploadContainer.innerHTML = '';
+  
+  props.forEach((p, i) => {
     const row = document.createElement('div');
     row.className = 'img-upload-row';
     row.innerHTML = `
-      <label title="${prop.title}">#${i + 1} — ${prop.title.slice(0, 40)}${prop.title.length > 40 ? '…' : ''}</label>
-      <input type="file" id="bulk-img-${i}" multiple accept="image/*" data-index="${i}" onchange="updateCount(this)">
-      <span class="img-count" id="count-${i}">0 files</span>
+      <label>#${i+1} · ${p.title}</label>
+      <input type="file" multiple accept="image/*" onchange="updateImgCount(this, ${i})">
+      <span class="img-count" id="img-count-${i}">0 files</span>
     `;
-    container.appendChild(row);
+    uploadContainer.appendChild(row);
   });
-
+  
   goTo(2);
 }
 
-function updateCount(input) {
-  const idx = input.getAttribute('data-index');
-  document.getElementById(`count-${idx}`).textContent = `${input.files.length} file${input.files.length !== 1 ? 's' : ''}`;
+function updateImgCount(input, index) {
+  const count = input.files.length;
+  document.getElementById(`img-count-${index}`).textContent = `${count} file${count !== 1 ? 's' : ''}`;
 }
 
 // ── Step 2 → Step 3 ───────────────────────────────────────
 async function goToPreview() {
+  const grid = document.getElementById('preview-grid');
+  grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">Loading previews…</div>';
+  goTo(3);
+
   try {
-    const resp = await fetch(`/api/preview-bulk`, {
+    const resp = await fetch('/api/preview-bulk', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ properties: bulkProperties }),
@@ -455,43 +461,38 @@ async function goToPreview() {
     const result = await resp.json();
     if (!result.success) { showToast('Error: ' + result.error); return; }
 
-    const grid = document.getElementById('preview-grid');
     grid.innerHTML = '';
+    document.getElementById('preview-count-label').textContent = `(${result.previews.length} properties)`;
+    
     result.previews.forEach((p, i) => {
       const card = document.createElement('div');
       card.className = 'preview-card';
       card.innerHTML = `
-        <div class="preview-card-title">
-          <button class="copy-small" onclick="copyText(this)">Copy</button>
-          #${i + 1} — ${p.title}
-        </div>
-        <div class="preview-message">${escHtml(p.message)}</div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:4px">📁 Drive folder:</div>
-        <span class="folder-pill">${escHtml(p.drive_folder_name)}</span>
+        <div class="preview-card-title">${p.title}</div>
+        <button class="copy-small" onclick="copyText(this)">Copy</button>
+        <div class="preview-message">${p.message}</div>
+        <div class="folder-pill">${p.drive_folder_name}</div>
       `;
       grid.appendChild(card);
     });
-
-    document.getElementById('preview-count-label').textContent = `${result.previews.length} propert${result.previews.length === 1 ? 'y' : 'ies'}`;
-    goTo(3);
   } catch (err) {
-    showToast('Request failed: ' + err.message);
+    grid.innerHTML = `<div style="grid-column:1/-1;color:#b91c1c;padding:20px">Failed to load previews: ${err.message}</div>`;
   }
 }
 
-function escHtml(str) {
-  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
 function copyText(btn) {
-  const msg = btn.closest('.preview-card').querySelector('.preview-message').textContent;
-  navigator.clipboard.writeText(msg).then(() => showToast('✓ Copied'));
+  const text = btn.nextElementSibling.textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const old = btn.textContent;
+    btn.textContent = '✓ Copied';
+    setTimeout(() => btn.textContent = old, 2000);
+  });
 }
 
 // ── Step 3 → Step 4 ───────────────────────────────────────
 async function generateAll() {
   try {
-    const resp = await fetch(`/api/generate-bulk`, {
+    const resp = await fetch('/api/generate-bulk', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ properties: bulkProperties }),
@@ -500,27 +501,31 @@ async function generateAll() {
     if (!result.success) { showToast('Error: ' + result.error); return; }
 
     document.getElementById('processed-count').textContent = result.processed_count;
+    const errSummary = document.getElementById('error-summary');
     if (result.errors && result.errors.length) {
-      document.getElementById('error-summary').textContent = 'Errors: ' + result.errors.join(' | ');
+      errSummary.innerHTML = `⚠️ ${result.errors.length} errors occurred. Check the logs for details.`;
+    } else {
+      errSummary.innerHTML = '';
     }
 
     const list = document.getElementById('download-list');
     list.innerHTML = `
-      <li><a href="${result.zip_file}" download>📦 Download All (ZIP)</a></li>
-      <li><a href="${result.txt_file}" download>📝 All Messages (.txt)</a></li>
-      <li><a href="${result.json_file}" download>📊 Property Data (.json)</a></li>
+      <li><a href="${result.zip_file}" download>📦 All Messages & Data (.zip)</a></li>
+      <li><a href="${result.combined_txt}" download>📄 Combined Messages (.txt)</a></li>
+      <li><a href="${result.combined_json}" download>📊 Combined Data (.json)</a></li>
     `;
     goTo(4);
   } catch (err) {
-    showToast('Request failed: ' + err.message);
+    showToast('Generation failed: ' + err.message);
   }
 }
 
-// ── Smart Paste for bulk cards (mirrors admin_property.html logic) ───
+// ── Smart Paste Mapping ───────────────────────────────────
 async function mapCardPaste(cardEl) {
   const raw = cardEl.querySelector('.f-raw-paste').value.trim();
-  const resultEl = cardEl.querySelector('.f-paste-result');
   if (!raw) { showToast('Paste some property text first.'); return; }
+
+  const resultEl = cardEl.querySelector('.f-paste-result');
   resultEl.textContent = 'Analysing…';
 
   const extracted = {};
@@ -530,23 +535,19 @@ async function mapCardPaste(cardEl) {
   let bhkStr = '';
   if (bhkM) bhkStr = bhkM[1] + ' BHK';
 
-  // Price / Rent (handles comma-formatted numbers)
-  const croreM = raw.match(/(?:₹\s*)?(\d+(?:\.\d+)?)\s*(?:cr|crore)/i);
-  const lakhM  = raw.match(/(?:₹\s*)?(\d+(?:\.\d+)?)\s*(?:l|lakh|lakhs)/i);
-  const rentM  = raw.match(/(?:₹\s*|rs\.?\s*)([\d,]+)\s*(?:\/\s*(?:month|mon|mo|pm))?/i);
-  if (croreM)      extracted.rent = String(Math.round(parseFloat(croreM[1]) * 1e7));
-  else if (lakhM)  extracted.rent = String(Math.round(parseFloat(lakhM[1]) * 1e5));
-  else if (rentM)  extracted.rent = rentM[1].replace(/,/g, '');
+  // Price / Rent
+  const rentM = raw.match(/(?:₹\s*|rs\.?\s*)([\d,]+)\s*(?:\/\s*(?:month|mon|mo|pm))?/i);
+  if (rentM) extracted.rent = rentM[1].replace(/,/g, '');
 
-  // Deposit (handles comma-formatted)
-  const depositM = raw.match(/deposit[:\s₹]*([\d,]+)/i);
-  if (depositM) extracted.deposit = depositM[1].replace(/,/g, '');
-
-  // Maintenance (handles comma-formatted)
+  // Maintenance
   const maintM = raw.match(/maintenance[:\s₹]*([\d,]+)/i);
   if (maintM) extracted.maintenance = maintM[1].replace(/,/g, '');
 
-  // Area → sqft (handles "1,280 sq ft", "1280sqft", "1280 square feet")
+  // Deposit
+  const depositM = raw.match(/deposit[:\s₹]*([\d,]+)/i);
+  if (depositM) extracted.deposit = depositM[1].replace(/,/g, '');
+
+  // Area
   const areaM = raw.match(/([\d,]+(?:\.\d+)?)\s*(?:sqft|sq\.?\s*ft\.?|square\s*feet)/i);
   if (areaM) extracted.sqft = areaM[1].replace(/,/g, '');
 
@@ -554,37 +555,21 @@ async function mapCardPaste(cardEl) {
   const floorM = raw.match(/(\d+)(?:st|nd|rd|th)?\s*floor/i);
   if (floorM) extracted.floor = floorM[1];
 
-  // Furnishing / Permission status
+  // Furnishing
   if (/fully\s*(?:furnished|permitted)/i.test(raw))           extracted.furnishing = 'Fully Furnished';
   else if (/semi[\s-]*(?:furnished|permitted)/i.test(raw))    extracted.furnishing = 'Semi-Furnished';
   else if (/unfurnished|bare[\s-]*shell/i.test(raw))          extracted.furnishing = 'Unfurnished';
 
-  // Availability: past/current → "Immediate"; future → keep the date string
+  // Availability
   if (/ready\s*to\s*(?:move|occupy)|immediate|vacant|available\s*now/i.test(raw)) {
     extracted.available_from = 'Immediate';
-  } else {
-    const mo = 'jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?';
-    const datePatterns = [
-      /available\s*(?:from)?\s*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i,
-      new RegExp(`available\\s*(?:from)?\\s*(\\d{1,2}\\s*(?:${mo})\\s*\\d{2,4})`, 'i'),
-      new RegExp(`(?:from|after)\\s*((?:${mo})\\s+\\d{4})`, 'i'),
-      /(\d{4}-\d{2}-\d{2})/,
-    ];
-    for (const pat of datePatterns) {
-      const m = raw.match(pat);
-      if (m) {
-        const d = new Date(m[1]);
-        extracted.available_from = (!isNaN(d) && d <= new Date()) ? 'Immediate' : m[1].trim();
-        break;
-      }
-    }
   }
 
-  // Google Maps URL → map_link (geocoded below)
+  // Google Maps URL
   const mapsM = raw.match(/https?:\/\/(?:maps\.google\.com|goo\.gl\/maps|maps\.app\.goo\.gl|www\.google\.com\/maps)[^\s]*/i);
   if (mapsM) extracted.map_link = mapsM[0];
 
-  // Location / locality — explicit patterns first, city list fallback
+  // Location / locality
   const localityPatterns = [
     /(?:located?\s+(?:in|at)|location\s*[:–\-]|area\s*[:–\-]|locality\s*[:–\-])\s*([A-Za-z][a-zA-Z\s]{2,30}?)(?:,|\.|\n|bangalore|bengaluru|mumbai|delhi|hyderabad|chennai|pune|$)/i,
     /\bin\s+([A-Z][a-zA-Z\s]{2,25}?)\s+(?:bangalore|bengaluru|mumbai|delhi|hyderabad|chennai|pune)/i,
@@ -610,7 +595,7 @@ async function mapCardPaste(cardEl) {
   ];
   for (const pat of societyPatterns) {
     const m = raw.match(pat);
-    if (m) { extracted.society = m[1].trim(); break; }
+    if (m) { extracted.property_name = m[1].trim(); break; }
   }
 
   // Preferred tenant
@@ -634,8 +619,8 @@ async function mapCardPaste(cardEl) {
       });
       const gd = await geo.json();
       if (gd.success) {
-        if (gd.place_name && !extracted.society) extracted.society = gd.place_name;
-        if (gd.establishment && !extracted.society) extracted.society = gd.establishment;
+        if (gd.place_name && !extracted.property_name) extracted.property_name = gd.place_name;
+        if (gd.establishment && !extracted.property_name) extracted.property_name = gd.establishment;
         if (gd.locality) extracted.location = gd.locality;
         else if (gd.city && !extracted.location) extracted.location = gd.city;
       }
@@ -648,7 +633,7 @@ async function mapCardPaste(cardEl) {
     '.f-deposit': 'deposit', '.f-sqft': 'sqft', '.f-floor': 'floor',
     '.f-furnishing': 'furnishing', '.f-available': 'available_from',
     '.f-map': 'map_link', '.f-location': 'location',
-    '.f-society': 'society', '.f-tenant': 'preferred_tenant',
+    '.f-property-name': 'property_name', '.f-tenant': 'preferred_tenant',
   };
 
   const applied = [];
