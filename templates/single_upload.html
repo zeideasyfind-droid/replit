@@ -327,6 +327,7 @@ const _mappedSingle = new Set();
 
 
 
+
 async function runPasteMapping() {
   const raw = document.getElementById('raw_paste').value.trim();
   if (!raw) { showToast('Paste some property text first.'); return; }
@@ -334,6 +335,7 @@ async function runPasteMapping() {
   const resultEl = document.getElementById('paste-result');
   resultEl.textContent = 'Analysing…';
 
+  const lines = raw.split('\n').map(l => l.trim()).filter(l => l);
   const extracted = {};
 
   function normalizeNumber(s) {
@@ -347,116 +349,83 @@ async function runPasteMapping() {
     return String(Math.round(num));
   }
 
-  // 1. Furnishing (Global check)
+  // 1. Title (First line)
+  if (lines.length > 0) extracted.title = lines[0].replace(/\*/g, '').trim();
+
+  // 2. Furnishing
   if (/fully\s*(?:furnished|permitted)/i.test(raw)) extracted.furnishing = 'Fully Furnished';
   else if (/semi[\s-]*(?:furnished|permitted)/i.test(raw)) extracted.furnishing = 'Semi-Furnished';
   else if (/unfurnished|bare[\s-]*shell/i.test(raw)) extracted.furnishing = 'Unfurnished';
 
-  // 2. Rent / Price
+  // 3. Rent
   const rentM = raw.match(/rent\s*[:\-–]?\s*([₹rs\.\s]*[\d,kL\.]+)/i);
-  if (rentM) {
-    extracted.rent = normalizeNumber(rentM[1]);
-  } else {
-    const croreM = raw.match(/([\d\.]+)\s*(?:cr|crore)/i);
-    const lakhM = raw.match(/([\d\.]+)\s*(?:l|lakh|lakhs)/i);
-    if (croreM) extracted.rent = String(Math.round(parseFloat(croreM[1]) * 1e7));
-    else if (lakhM) extracted.rent = String(Math.round(parseFloat(lakhM[1]) * 1e5));
-  }
-
-  // 3. Deposit
-  const depositM = raw.match(/deposit\s*[:\-–]?\s*([₹rs\.\s]*[\d,kL\.]+)/i);
-  if (depositM) extracted.deposit = normalizeNumber(depositM[1]);
+  if (rentM) extracted.rent = normalizeNumber(rentM[1]);
 
   // 4. Maintenance
   const maintM = raw.match(/maintenance\s*[:\-–]?\s*([₹rs\.\s]*[\d,kL\.]+)/i);
   if (maintM) extracted.maintenance = normalizeNumber(maintM[1]);
 
-  // 5. Area / Sqft
-  const areaM = raw.match(/(?:sqft|area|size|sq\.?\s*ft\.?)\s*[:\-–]?\s*([\d,]+(?:\.[\d]+)?)/i) || 
-                raw.match(/([\d,]+(?:\.[\d]+)?)\s*(?:sqft|sq\.?\s*ft\.?|square\s*feet)/i);
-  if (areaM) extracted.sqft = areaM[1].replace(/,/g, '');
+  // 5. Deposit
+  const depositM = raw.match(/deposit\s*[:\-–]?\s*([₹rs\.\s]*[\d,kL\.]+)/i);
+  if (depositM) extracted.deposit = normalizeNumber(depositM[1]);
 
-  // 6. Floor (Handle non-numeric like Villa)
+  // 6. Sqft
+  const sqftM = raw.match(/sqft\s*[:\-–]?\s*([\d,]+)/i) || 
+                raw.match(/([\d,]+)\s*(?:sqft|sq\.?\s*ft|square\s*feet)/i);
+  if (sqftM) extracted.sqft = sqftM[1].replace(/,/g, '');
+
+  // 7. Floor
   const floorM = raw.match(/floor\s*[:\-–]?\s*([^\n,]+)/i);
   if (floorM) extracted.floor = floorM[1].trim();
-  else {
-    const floorNumM = raw.match(/(\d+)(?:st|nd|rd|th)?\s*floor/i);
-    if (floorNumM) extracted.floor = floorNumM[1];
-  }
-
-  // 7. BHK
-  const bhkM = raw.match(/(\d)\s*(?:bhk|bedroom)/i);
-  let bhkStr = '';
-  if (bhkM) {
-    bhkStr = bhkM[1] + ' BHK';
-    extracted.bhk = bhkStr;
-  }
 
   // 8. Available From
   const availM = raw.match(/available\s*(?:from)?\s*[:\-–]?\s*([^\n,]+)/i);
   if (availM) extracted.available_from = availM[1].trim();
 
   // 9. Preferred Tenant
-  if (/\b(?:family|families)\b/i.test(raw) && /working|professional/i.test(raw)) extracted.preferred_tenant = 'Family / Working Professionals';
-  else if (/\b(?:family|families)\b/i.test(raw)) extracted.preferred_tenant = 'Family';
-  else if (/working|professional/i.test(raw)) extracted.preferred_tenant = 'Working Professionals';
-  else if (/anyone|any/i.test(raw)) extracted.preferred_tenant = 'Anyone';
+  const prefM = raw.match(/preferred\s*tenant\s*[:\-–]?\s*([^\n,]+)/i);
+  if (prefM) extracted.preferred_tenant = prefM[1].trim();
 
   // 10. Diet Preference
   if (/vegetarian\s*only|only\s*vegetarian/i.test(raw)) extracted.diet_preference = 'Vegetarian';
   else if (/non-vegetarian|non\s*veg/i.test(raw)) extracted.diet_preference = 'Non-Vegetarian';
-  else extracted.diet_preference = '';
 
   // 11. Pets
-  if (/pets\s*[:\-–]?\s*(?:allowed|yes|ok)/i.test(raw)) extracted.pets = 'Allowed';
-  else if (/pets\s*[:\-–]?\s*(?:not allowed|no|not permitted)/i.test(raw)) extracted.pets = 'Not Allowed';
+  const petsM = raw.match(/pets\s*[:\-–]?\s*([^\n,]+)/i);
+  if (petsM) {
+    const val = petsM[1].toLowerCase();
+    if (val.includes('allowed') || val.includes('yes')) extracted.pets = 'Allowed';
+    else if (val.includes('not') || val.includes('no')) extracted.pets = 'Not Allowed';
+  }
 
-  // 12. Community Type
-  if (/community\s*[:\-–]?\s*gated|gated\s*community|gated\s*society|society\s*[:\-–]?\s*gated/i.test(raw)) extracted.community = 'Gated';
-  else if (/semi-gated/i.test(raw)) extracted.community = 'Semi-Gated';
-  else if (/non-society|independent/i.test(raw)) extracted.community = 'Non-Society';
+  // 12. Community
+  const commM = raw.match(/community\s*[:\-–]?\s*([^\n,]+)/i);
+  if (commM) {
+    const val = commM[1].toLowerCase();
+    if (val.includes('gated')) extracted.community = 'Gated';
+    else if (val.includes('semi')) extracted.community = 'Semi-Gated';
+  }
 
   // 13. Location
   const locM = raw.match(/location\s*[:\-–]?\s*\*?([^\*\n]+)\*?/i);
   if (locM) extracted.location = locM[1].trim();
 
-  // 14. Property Name (Check bold text and above maps link)
-  const boldTexts = raw.match(/\*([^\*\n]{3,})\*/g);
-  if (boldTexts) {
-    for (const btRaw of boldTexts) {
-      const bt = btRaw.replace(/\*/g, '').trim();
-      if (bt.toLowerCase() !== (extracted.location || '').toLowerCase() && !bt.includes('maps.app.goo.gl')) {
-        extracted.property_name = bt;
-        break;
-      }
-    }
-  }
-  if (!extracted.property_name) {
-    const lines = raw.split('\n').map(l => l.trim()).filter(l => l);
-    for (let i = 0; i < lines.length; i++) {
-      if (/https?:\/\/(?:maps\.google\.com|goo\.gl\/maps|maps\.app\.goo\.gl)/.test(lines[i])) {
-        if (i > 0) {
-          const potential = lines[i-1].replace(/\*/g, '').trim();
-          if (potential.toLowerCase() !== (extracted.location || '').toLowerCase()) {
-            extracted.property_name = potential;
-            break;
-          }
+  // 14. Property Name
+  for (let i = 0; i < lines.length; i++) {
+    if (/https?:\/\/(?:maps\.google\.com|goo\.gl\/maps|maps\.app\.goo\.gl)/.test(lines[i])) {
+      if (i > 0) {
+        const potential = lines[i-1].replace(/\*/g, '').trim();
+        if (potential.toLowerCase() !== (extracted.location || '').toLowerCase()) {
+          extracted.property_name = potential;
+          break;
         }
       }
     }
   }
 
-  // 15. Links
+  // 15. Map Link
   const mapsM = raw.match(/https?:\/\/(?:maps\.google\.com|goo\.gl\/maps|maps\.app\.goo\.gl|www\.google\.com\/maps)[^\s]*/i);
   if (mapsM) extracted.map_link = mapsM[0];
-
-  // 16. Title Generation
-  if (bhkStr) {
-    const furnish = extracted.furnishing || '';
-    const loc = extracted.location || '';
-    const base = furnish ? furnish + ' ' + bhkStr : bhkStr + ' Property';
-    extracted.title = loc ? base + ' • ' + loc : base;
-  }
 
 
   // Field ID map: extracted key → form element ID

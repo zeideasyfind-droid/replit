@@ -610,12 +610,13 @@ function updateCoverPreview() {
 // ── Smart Paste ───────────────────────────────────────────────────────────────
 
 
+
 function runSmartMapping() {
   const raw = document.getElementById('smart_paste').value.trim();
   if (!raw) { showToast('Paste some property text first.'); return; }
 
+  const lines = raw.split('\n').map(l => l.trim()).filter(l => l);
   const extracted = {};
-  const uncertain = [];
 
   function normalizeNumber(s) {
     if (!s) return '';
@@ -628,117 +629,55 @@ function runSmartMapping() {
     return String(Math.round(num));
   }
 
-  // 1. Furnishing (Global check)
+  // 1. Title
+  if (lines.length > 0) extracted.title = lines[0].replace(/\*/g, '').trim();
+
+  // 2. Furnishing
   if (/fully\s*(?:furnished|permitted)/i.test(raw)) extracted.furnishing = 'Fully Furnished';
   else if (/semi[\s-]*(?:furnished|permitted)/i.test(raw)) extracted.furnishing = 'Semi Furnished';
   else if (/unfurnished|bare[\s-]*shell/i.test(raw)) extracted.furnishing = 'Unfurnished';
 
-  // 2. Listing type
-  if (/\b(rent|rental|monthly|per month|pm\b)/i.test(raw)) extracted.listing_type = 'Rent';
-  else if (/\b(sale|for sale|asking|crore|cr\b|lakh|lakhs)\b/i.test(raw)) extracted.listing_type = 'Sale';
-
-  // 3. BHK
-  const bhkM = raw.match(/(\d)\s*(?:bhk|bedroom)/i);
-  if (bhkM) {
-    const n = bhkM[1];
-    const opts = ['1 RK','1 BHK','2 BHK','3 BHK','4 BHK','4+ BHK'];
-    extracted.bhk = opts.find(o => o.startsWith(n + ' BHK')) || (n + ' BHK');
-    extracted.bedrooms = n;
-  }
-
-  // 4. Price / Rent
+  // 3. Price
   const rentM = raw.match(/rent\s*[:\-–]?\s*([₹rs\.\s]*[\d,kL\.]+)/i);
-  if (rentM) {
-    extracted.price = normalizeNumber(rentM[1]);
-  } else {
-    const croreM = raw.match(/([\d\.]+)\s*(?:cr|crore)/i);
-    const lakhM = raw.match(/([\d\.]+)\s*(?:l|lakh|lakhs)/i);
-    if (croreM) extracted.price = String(Math.round(parseFloat(croreM[1]) * 1e7));
-    else if (lakhM) extracted.price = String(Math.round(parseFloat(lakhM[1]) * 1e5));
-  }
+  if (rentM) extracted.price = normalizeNumber(rentM[1]);
+
+  // 4. Maintenance
+  const maintM = raw.match(/maintenance\s*[:\-–]?\s*([₹rs\.\s]*[\d,kL\.]+)/i);
+  if (maintM) extracted.maintenance = normalizeNumber(maintM[1]);
 
   // 5. Deposit
   const depositM = raw.match(/deposit\s*[:\-–]?\s*([₹rs\.\s]*[\d,kL\.]+)/i);
   if (depositM) extracted.deposit = normalizeNumber(depositM[1]);
 
-  // 6. Maintenance
-  const maintM = raw.match(/maintenance\s*[:\-–]?\s*([₹rs\.\s]*[\d,kL\.]+)/i);
-  if (maintM) extracted.maintenance = normalizeNumber(maintM[1]);
+  // 6. Area
+  const sqftM = raw.match(/sqft\s*[:\-–]?\s*([\d,]+)/i) || 
+                raw.match(/([\d,]+)\s*(?:sqft|sq\.?\s*ft|square\s*feet)/i);
+  if (sqftM) extracted.area_super = sqftM[1].replace(/,/g, '');
 
-  // 7. Area
-  const areaM = raw.match(/(?:sqft|area|size|sq\.?\s*ft\.?)\s*[:\-–]?\s*([\d,]+(?:\.[\d]+)?)/i) || 
-                raw.match(/([\d,]+(?:\.[\d]+)?)\s*(?:sqft|sq\.?\s*ft|square\s*feet)/i);
-  if (areaM) extracted.area_super = areaM[1].replace(/,/g, '');
-
-  // 8. Floor (Handle non-numeric like Villa)
+  // 7. Floor
   const floorM = raw.match(/floor\s*[:\-–]?\s*([^\n,]+)/i);
   if (floorM) extracted.floor = floorM[1].trim();
-  else {
-    const floorNumM = raw.match(/(\d+)(?:st|nd|rd|th)?\s*floor/i);
-    if (floorNumM) extracted.floor = floorNumM[1];
-  }
 
-  // 9. Bathrooms
-  const bathM = raw.match(/(\d)\s*(?:bath|bathroom|washroom)/i);
-  if (bathM) extracted.bathrooms = bathM[1];
-
-  // 10. Availability
-  if (/ready\s*to\s*move/i.test(raw))          extracted.availability = 'ready to move';
-  else if (/under\s*construction/i.test(raw))  extracted.availability = 'under construction';
-  else if (/\bavailable\b/i.test(raw))          extracted.availability = 'available';
-  else if (/\bsold\b/i.test(raw))               extracted.availability = 'sold';
-
-  // 11. Facing
-  const facingM = raw.match(/\b(east|west|north|south|north-?east|north-?west|south-?east|south-?west)\b\s*facing/i);
-  if (facingM) {
-    const f = facingM[1].replace(/-/g,'').replace(/(\w)(\w+)/g, (_, a, b) => a.toUpperCase() + b.toLowerCase());
-    extracted.facing = f;
-  }
-
-  // 12. Google Maps URL
-  const mapsM = raw.match(/https?:\/\/(?:maps\.google\.com|goo\.gl\/maps|maps\.app\.goo\.gl|www\.google\.com\/maps)[^\s]*/i);
-  if (mapsM) extracted.maps_link = mapsM[0];
-
-  // 13. Phone
-  const phoneM = raw.match(/(?:\+91[\s-]?)?[6-9]\d{9}/);
-  if (phoneM) extracted.phone = phoneM[0].replace(/[\s-]/g,'');
-
-  // 14. Location / Locality
+  // 8. Location
   const locM = raw.match(/location\s*[:\-–]?\s*\*?([^\*\n]+)\*?/i);
   if (locM) extracted.locality = locM[1].trim();
 
-  // 15. Building Name / Property Name (Check bold text and above maps link)
-  const boldTexts = raw.match(/\*([^\*\n]{3,})\*/g);
-  if (boldTexts) {
-    for (const btRaw of boldTexts) {
-      const bt = btRaw.replace(/\*/g, '').trim();
-      if (bt.toLowerCase() !== (extracted.locality || '').toLowerCase() && !bt.includes('maps.app.goo.gl')) {
-        extracted.building_name = bt;
-        break;
-      }
-    }
-  }
-  if (!extracted.building_name) {
-    const lines = raw.split('\n').map(l => l.trim()).filter(l => l);
-    for (let i = 0; i < lines.length; i++) {
-      if (/https?:\/\/(?:maps\.google\.com|goo\.gl\/maps|maps\.app\.goo\.gl)/.test(lines[i])) {
-        if (i > 0) {
-          const potential = lines[i-1].replace(/\*/g, '').trim();
-          if (potential.toLowerCase() !== (extracted.locality || '').toLowerCase()) {
-            extracted.building_name = potential;
-            break;
-          }
+  // 9. Building Name
+  for (let i = 0; i < lines.length; i++) {
+    if (/https?:\/\/(?:maps\.google\.com|goo\.gl\/maps|maps\.app\.goo\.gl)/.test(lines[i])) {
+      if (i > 0) {
+        const potential = lines[i-1].replace(/\*/g, '').trim();
+        if (potential.toLowerCase() !== (extracted.locality || '').toLowerCase()) {
+          extracted.building_name = potential;
+          break;
         }
       }
     }
   }
 
-  // 16. Auto-generate title
-  if (!document.getElementById('title').value && extracted.bhk) {
-    const pt = document.getElementById('property_type').value || 'Property';
-    const loc = extracted.locality || document.getElementById('locality').value || '';
-    extracted.title = `${extracted.bhk} ${pt}${loc ? ' • ' + loc : ''}`;
-  }
+  // 10. Maps Link
+  const mapsM = raw.match(/https?:\/\/(?:maps\.google\.com|goo\.gl\/maps|maps\.app\.goo\.gl|www\.google\.com\/maps)[^\s]*/i);
+  if (mapsM) extracted.maps_link = mapsM[0];
 
 
   // Apply to form

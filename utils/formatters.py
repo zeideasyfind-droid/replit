@@ -5,16 +5,12 @@ from .smart_parser import parse_property_text
 
 
 def normalize_availability(date_str):
-    """Normalize availability date to 'Ready to occupy' if immediate/today/past."""
     if not date_str:
         return "Ready to occupy"
-
     date_str = str(date_str).lower().strip()
-
     immediate_terms = ["immediate", "ready", "today", "now", "vacant", "available now"]
     if any(term in date_str for term in immediate_terms):
         return "Ready to occupy"
-
     try:
         parsed_date = datetime.strptime(date_str, "%Y-%m-%d").date()
         if parsed_date <= date.today():
@@ -22,18 +18,14 @@ def normalize_availability(date_str):
         return parsed_date.strftime("%d %b %Y")
     except (ValueError, TypeError):
         pass
-
     return date_str.title()
 
 
 def normalize_tenant_preference(tenant_str, diet_pref=None):
-    """Normalize tenant preference and add diet information."""
     tenant_str = str(tenant_str).lower() if tenant_str else ""
-
     has_family = "family" in tenant_str or "families" in tenant_str
     has_professional = any(t in tenant_str for t in ["working", "professional"])
     has_anyone = any(t in tenant_str for t in ["anyone", "any", "open", "all"])
-
     if has_anyone or (not has_family and not has_professional):
         result = "Anyone"
     else:
@@ -43,50 +35,28 @@ def normalize_tenant_preference(tenant_str, diet_pref=None):
         if has_professional:
             parts.append("Working Professionals")
         result = " / ".join(parts) if parts else "Anyone"
-
     if diet_pref:
         diet_pref = str(diet_pref).lower().strip()
         if "vegetarian" in diet_pref and "non" not in diet_pref:
             result += ", Vegetarian"
         elif "non-vegetarian" in diet_pref or "non veg" in diet_pref:
             result += ", Non-Vegetarian"
-
     return result
 
 
 def canonical_normalize_property(raw_data):
-    """
-    Returns a stable, normalized property object.
-    Unifies Society/Apartment Name into Property Name.
-    Normalizes location based on micro-location preference.
-    """
-    # 1. Handle Property Name (unify Society/Apartment)
     property_name = (
         raw_data.get("property_name") or 
         raw_data.get("building_name") or 
-        raw_data.get("society") or 
-        raw_data.get("apartment") or 
         ""
     ).strip()
-
-    # 2. Location Normalization
     locality = raw_data.get("locality", "").strip()
     location_field = raw_data.get("location", "").strip()
     normalized_location = locality if locality else location_field
-
-    # 3. Basic Fields
     bhk = str(raw_data.get("bhk", "")).upper().strip()
     if bhk and "BHK" not in bhk:
         bhk = f"{bhk} BHK"
-        
     furnishing = raw_data.get("furnishing", "Semi-Furnished").strip()
-    if "fully" in furnishing.lower():
-        furnishing = "Fully Furnished"
-    elif "semi" in furnishing.lower():
-        furnishing = "Semi-Furnished"
-    elif "unfurnished" in furnishing.lower():
-        furnishing = "Unfurnished"
-
     return {
         "property_id": raw_data.get("property_id", ""),
         "property_name": property_name,
@@ -112,55 +82,21 @@ def canonical_normalize_property(raw_data):
         "gallery_link": raw_data.get("gallery_link", ""),
         "map_link": raw_data.get("map_link", raw_data.get("maps_link", "")),
         "description": raw_data.get("description", ""),
+        "raw_title": raw_data.get("title", "")
     }
 
 
 def render_meta_title(norm_prop):
-    parts = []
-    if norm_prop["furnishing"]:
-        parts.append(norm_prop["furnishing"])
-    if norm_prop["bhk"]:
-        parts.append(norm_prop["bhk"].replace(" ", ""))
-    if norm_prop["location"]:
-        parts.append(norm_prop["location"])
-    
-    return " | ".join(parts)
+    """Meta Title: Furnishing BHK - Location"""
+    furnish = norm_prop["furnishing"]
+    bhk = norm_prop["bhk"].replace(" ", "")
+    loc = norm_prop["location"]
+    return f"{furnish} {bhk} - {loc}"
 
 
 def render_whatsapp_title(norm_prop):
-    title_parts = []
-    if norm_prop["furnishing"]:
-        title_parts.append(norm_prop["furnishing"])
-    if norm_prop["bhk"]:
-        title_parts.append(norm_prop["bhk"])
-    
-    base_title = " ".join(title_parts)
-    
-    extras = []
-    if norm_prop["bathrooms"]:
-        val = norm_prop["bathrooms"]
-        suffix = "Bathrooms" if val != "1" else "Bathroom"
-        extras.append(f"{val} {suffix}")
-    
-    if norm_prop["balcony"]:
-        val = norm_prop["balcony"]
-        suffix = "Balconies" if val != "1" else "Balcony"
-        extras.append(f"{val} {suffix}")
-        
-    if norm_prop["utility"]:
-        u = norm_prop["utility"].lower()
-        if u in ("yes", "true", "1", "available", "utility"):
-            extras.append("Utility")
-        elif u not in ("no", "false", "0", "none", ""):
-            extras.append(norm_prop["utility"])
-
-    if not extras:
-        return base_title
-    
-    if len(extras) > 1:
-        return f"{base_title}, {', '.join(extras[:-1])} & {extras[-1]}"
-    else:
-        return f"{base_title}, {extras[0]}"
+    """WhatsApp Title: Use the descriptive title from the first line"""
+    return norm_prop["raw_title"]
 
 
 def render_meta_description(norm_prop):
@@ -178,21 +114,17 @@ def render_meta_description(norm_prop):
         f"Community: {norm_prop['community']}",
         f"Location: {norm_prop['location']}, {norm_prop['city']}",
     ]
-    
     if norm_prop["property_name"]:
         lines.append(f"Society: {norm_prop['property_name']}")
-        
     if norm_prop["map_link"]:
         lines.append("")
         lines.append(f"📍 Map: {norm_prop['map_link']}")
-        
     return "\n".join(lines)
 
 
 def format_whatsapp_message(raw_data):
     norm_prop = canonical_normalize_property(raw_data)
     title = render_whatsapp_title(norm_prop)
-
     lines = [
         f"*{title}*",
         "",
@@ -207,16 +139,12 @@ def format_whatsapp_message(raw_data):
         f"Community: {norm_prop['community']}",
         f"Location: *{norm_prop['location']}*",
     ]
-
     if norm_prop["gallery_link"]:
         lines += ["", f"📸 *Gallery:* {norm_prop['gallery_link']}"]
-
     if norm_prop["property_name"]:
         lines += ["", f"*{norm_prop['property_name']}*"]
-
     if norm_prop["map_link"]:
         lines.append(f"📍 Map: {norm_prop['map_link']}")
-
     return "\n".join(lines)
 
 
