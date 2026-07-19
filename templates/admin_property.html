@@ -609,6 +609,7 @@ function updateCoverPreview() {
 
 // ── Smart Paste ───────────────────────────────────────────────────────────────
 
+
 function runSmartMapping() {
   const raw = document.getElementById('smart_paste').value.trim();
   if (!raw) { showToast('Paste some property text first.'); return; }
@@ -627,11 +628,16 @@ function runSmartMapping() {
     return String(Math.round(num));
   }
 
-  // Listing type
+  // 1. Furnishing (Global check)
+  if (/fully\s*(?:furnished|permitted)/i.test(raw)) extracted.furnishing = 'Fully Furnished';
+  else if (/semi[\s-]*(?:furnished|permitted)/i.test(raw)) extracted.furnishing = 'Semi Furnished';
+  else if (/unfurnished|bare[\s-]*shell/i.test(raw)) extracted.furnishing = 'Unfurnished';
+
+  // 2. Listing type
   if (/\b(rent|rental|monthly|per month|pm\b)/i.test(raw)) extracted.listing_type = 'Rent';
   else if (/\b(sale|for sale|asking|crore|cr\b|lakh|lakhs)\b/i.test(raw)) extracted.listing_type = 'Sale';
 
-  // BHK
+  // 3. BHK
   const bhkM = raw.match(/(\d)\s*(?:bhk|bedroom)/i);
   if (bhkM) {
     const n = bhkM[1];
@@ -640,7 +646,7 @@ function runSmartMapping() {
     extracted.bedrooms = n;
   }
 
-  // Price / Rent
+  // 4. Price / Rent
   const rentM = raw.match(/rent\s*[:\-–]?\s*([₹rs\.\s]*[\d,kL\.]+)/i);
   if (rentM) {
     extracted.price = normalizeNumber(rentM[1]);
@@ -651,59 +657,57 @@ function runSmartMapping() {
     else if (lakhM) extracted.price = String(Math.round(parseFloat(lakhM[1]) * 1e5));
   }
 
-  // Deposit
+  // 5. Deposit
   const depositM = raw.match(/deposit\s*[:\-–]?\s*([₹rs\.\s]*[\d,kL\.]+)/i);
   if (depositM) extracted.deposit = normalizeNumber(depositM[1]);
 
-  // Maintenance
+  // 6. Maintenance
   const maintM = raw.match(/maintenance\s*[:\-–]?\s*([₹rs\.\s]*[\d,kL\.]+)/i);
   if (maintM) extracted.maintenance = normalizeNumber(maintM[1]);
 
-  // Area
-  const areaM = raw.match(/(?:sqft|area|size)\s*[:\-–]?\s*([\d,]+(?:\.[\d]+)?)/i) || 
+  // 7. Area
+  const areaM = raw.match(/(?:sqft|area|size|sq\.?\s*ft\.?)\s*[:\-–]?\s*([\d,]+(?:\.[\d]+)?)/i) || 
                 raw.match(/([\d,]+(?:\.[\d]+)?)\s*(?:sqft|sq\.?\s*ft|square\s*feet)/i);
   if (areaM) extracted.area_super = areaM[1].replace(/,/g, '');
 
-  // Floor
-  const floorM = raw.match(/floor\s*[:\-–]?\s*([\d/]+)/i) || 
-                 raw.match(/(\d+)(?:st|nd|rd|th)?\s*floor/i);
-  if (floorM) extracted.floor = floorM[1];
+  // 8. Floor (Handle non-numeric like Villa)
+  const floorM = raw.match(/floor\s*[:\-–]?\s*([^\n,]+)/i);
+  if (floorM) extracted.floor = floorM[1].trim();
+  else {
+    const floorNumM = raw.match(/(\d+)(?:st|nd|rd|th)?\s*floor/i);
+    if (floorNumM) extracted.floor = floorNumM[1];
+  }
 
-  // Bathrooms
+  // 9. Bathrooms
   const bathM = raw.match(/(\d)\s*(?:bath|bathroom|washroom)/i);
   if (bathM) extracted.bathrooms = bathM[1];
 
-  // Furnishing
-  if (/fully\s*(?:furnished|permitted)/i.test(raw))      extracted.furnishing = 'Fully Furnished';
-  else if (/semi[\s-]*(?:furnished|permitted)/i.test(raw))  extracted.furnishing = 'Semi Furnished';
-  else if (/unfurnished|bare[\s-]*shell/i.test(raw))       extracted.furnishing = 'Unfurnished';
-
-  // Availability
+  // 10. Availability
   if (/ready\s*to\s*move/i.test(raw))          extracted.availability = 'ready to move';
   else if (/under\s*construction/i.test(raw))  extracted.availability = 'under construction';
   else if (/\bavailable\b/i.test(raw))          extracted.availability = 'available';
   else if (/\bsold\b/i.test(raw))               extracted.availability = 'sold';
 
-  // Facing
+  // 11. Facing
   const facingM = raw.match(/\b(east|west|north|south|north-?east|north-?west|south-?east|south-?west)\b\s*facing/i);
   if (facingM) {
     const f = facingM[1].replace(/-/g,'').replace(/(\w)(\w+)/g, (_, a, b) => a.toUpperCase() + b.toLowerCase());
     extracted.facing = f;
   }
 
-  // Google Maps URL
+  // 12. Google Maps URL
   const mapsM = raw.match(/https?:\/\/(?:maps\.google\.com|goo\.gl\/maps|maps\.app\.goo\.gl|www\.google\.com\/maps)[^\s]*/i);
   if (mapsM) extracted.maps_link = mapsM[0];
 
-  // Phone
+  // 13. Phone
   const phoneM = raw.match(/(?:\+91[\s-]?)?[6-9]\d{9}/);
   if (phoneM) extracted.phone = phoneM[0].replace(/[\s-]/g,'');
 
-  // Location / Locality
+  // 14. Location / Locality
   const locM = raw.match(/location\s*[:\-–]?\s*\*?([^\*\n]+)\*?/i);
   if (locM) extracted.locality = locM[1].trim();
 
-  // Building Name / Property Name
+  // 15. Building Name / Property Name (Check bold text and above maps link)
   const boldTexts = raw.match(/\*([^\*\n]{3,})\*/g);
   if (boldTexts) {
     for (const btRaw of boldTexts) {
@@ -714,8 +718,22 @@ function runSmartMapping() {
       }
     }
   }
+  if (!extracted.building_name) {
+    const lines = raw.split('\n').map(l => l.trim()).filter(l => l);
+    for (let i = 0; i < lines.length; i++) {
+      if (/https?:\/\/(?:maps\.google\.com|goo\.gl\/maps|maps\.app\.goo\.gl)/.test(lines[i])) {
+        if (i > 0) {
+          const potential = lines[i-1].replace(/\*/g, '').trim();
+          if (potential.toLowerCase() !== (extracted.locality || '').toLowerCase()) {
+            extracted.building_name = potential;
+            break;
+          }
+        }
+      }
+    }
+  }
 
-  // Auto-generate title
+  // 16. Auto-generate title
   if (!document.getElementById('title').value && extracted.bhk) {
     const pt = document.getElementById('property_type').value || 'Property';
     const loc = extracted.locality || document.getElementById('locality').value || '';
