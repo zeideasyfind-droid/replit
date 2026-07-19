@@ -608,12 +608,24 @@ function updateCoverPreview() {
 }
 
 // ── Smart Paste ───────────────────────────────────────────────────────────────
+
 function runSmartMapping() {
   const raw = document.getElementById('smart_paste').value.trim();
   if (!raw) { showToast('Paste some property text first.'); return; }
 
   const extracted = {};
   const uncertain = [];
+
+  function normalizeNumber(s) {
+    if (!s) return '';
+    s = s.toLowerCase().replace(/[₹rs\.\s,]/g, '').trim();
+    let num = parseFloat(s);
+    if (isNaN(num)) return s;
+    if (s.includes('k')) num *= 1000;
+    else if (s.includes('l')) num *= 100000;
+    else if (s.includes('cr')) num *= 10000000;
+    return String(Math.round(num));
+  }
 
   // Listing type
   if (/\b(rent|rental|monthly|per month|pm\b)/i.test(raw)) extracted.listing_type = 'Rent';
@@ -628,42 +640,43 @@ function runSmartMapping() {
     extracted.bedrooms = n;
   }
 
-  // Price
-  const croreM = raw.match(/(?:₹\s*)?(\d+(?:\.\d+)?)\s*(?:cr|crore)/i);
-  const lakhM  = raw.match(/(?:₹\s*)?(\d+(?:\.\d+)?)\s*(?:l|lakh|lakhs)/i);
-  const rentM  = raw.match(/(?:₹\s*|rs\.?\s*)(\d[\d,]+)\s*(?:\/\s*(?:month|mon|mo|pm))?/i);
-  if (croreM)      extracted.price = String(Math.round(parseFloat(croreM[1]) * 1e7));
-  else if (lakhM)  extracted.price = String(Math.round(parseFloat(lakhM[1]) * 1e5));
-  else if (rentM)  extracted.price = rentM[1].replace(/,/g, '');
+  // Price / Rent
+  const rentM = raw.match(/rent\s*[:\-–]?\s*([₹rs\.\s]*[\d,kL\.]+)/i);
+  if (rentM) {
+    extracted.price = normalizeNumber(rentM[1]);
+  } else {
+    const croreM = raw.match(/([\d\.]+)\s*(?:cr|crore)/i);
+    const lakhM = raw.match(/([\d\.]+)\s*(?:l|lakh|lakhs)/i);
+    if (croreM) extracted.price = String(Math.round(parseFloat(croreM[1]) * 1e7));
+    else if (lakhM) extracted.price = String(Math.round(parseFloat(lakhM[1]) * 1e5));
+  }
 
   // Deposit
-  const depositM = raw.match(/deposit[:\s₹]*([0-9,]+)/i);
-  if (depositM) extracted.deposit = depositM[1].replace(/,/g,'');
+  const depositM = raw.match(/deposit\s*[:\-–]?\s*([₹rs\.\s]*[\d,kL\.]+)/i);
+  if (depositM) extracted.deposit = normalizeNumber(depositM[1]);
 
   // Maintenance
-  const maintM = raw.match(/maintenance[:\s₹]*([0-9,]+)/i);
-  if (maintM) extracted.maintenance = maintM[1].replace(/,/g,'');
-
-  // Furnishing
-  if (/fully\s*furnished/i.test(raw))      extracted.furnishing = 'Fully Furnished';
-  else if (/semi\s*furnished/i.test(raw))  extracted.furnishing = 'Semi Furnished';
-  else if (/unfurnished/i.test(raw))       extracted.furnishing = 'Unfurnished';
+  const maintM = raw.match(/maintenance\s*[:\-–]?\s*([₹rs\.\s]*[\d,kL\.]+)/i);
+  if (maintM) extracted.maintenance = normalizeNumber(maintM[1]);
 
   // Area
-  const areaM = raw.match(/(\d+(?:\.\d+)?)\s*(?:sqft|sq\.?\s*ft|square\s*feet)/i);
-  if (areaM) extracted.area_super = areaM[1];
+  const areaM = raw.match(/(?:sqft|area|size)\s*[:\-–]?\s*([\d,]+(?:\.[\d]+)?)/i) || 
+                raw.match(/([\d,]+(?:\.[\d]+)?)\s*(?:sqft|sq\.?\s*ft|square\s*feet)/i);
+  if (areaM) extracted.area_super = areaM[1].replace(/,/g, '');
 
   // Floor
-  const floorM = raw.match(/(\d+)(?:st|nd|rd|th)?\s*floor/i);
+  const floorM = raw.match(/floor\s*[:\-–]?\s*([\d/]+)/i) || 
+                 raw.match(/(\d+)(?:st|nd|rd|th)?\s*floor/i);
   if (floorM) extracted.floor = floorM[1];
 
   // Bathrooms
   const bathM = raw.match(/(\d)\s*(?:bath|bathroom|washroom)/i);
   if (bathM) extracted.bathrooms = bathM[1];
 
-  // Parking
-  if (/covered\s*parking/i.test(raw))  extracted.parking = '1 Covered';
-  else if (/\bparking\b/i.test(raw))   { extracted.parking = '1 Open'; uncertain.push('parking'); }
+  // Furnishing
+  if (/fully\s*(?:furnished|permitted)/i.test(raw))      extracted.furnishing = 'Fully Furnished';
+  else if (/semi[\s-]*(?:furnished|permitted)/i.test(raw))  extracted.furnishing = 'Semi Furnished';
+  else if (/unfurnished|bare[\s-]*shell/i.test(raw))       extracted.furnishing = 'Unfurnished';
 
   // Availability
   if (/ready\s*to\s*move/i.test(raw))          extracted.availability = 'ready to move';
@@ -686,44 +699,29 @@ function runSmartMapping() {
   const phoneM = raw.match(/(?:\+91[\s-]?)?[6-9]\d{9}/);
   if (phoneM) extracted.phone = phoneM[0].replace(/[\s-]/g,'');
 
-  // City
-  const cities = ['bengaluru','bangalore','mumbai','delhi','hyderabad','chennai','pune','kolkata','ahmedabad','surat','jaipur','noida','gurgaon','gurugram'];
-  const cityFound = cities.find(c => raw.toLowerCase().includes(c));
-  if (cityFound) {
-    const map = {'bangalore':'Bengaluru','gurugram':'Gurgaon'};
-    extracted.city = map[cityFound] || (cityFound.charAt(0).toUpperCase() + cityFound.slice(1));
-  }
+  // Location / Locality
+  const locM = raw.match(/location\s*[:\-–]?\s*\*?([^\*\n]+)\*?/i);
+  if (locM) extracted.locality = locM[1].trim();
 
-  // Landmark (look for "near <place>")
-  const nearM = raw.match(/near\s+([A-Z][a-zA-Z\s]{3,30}?)(?:,|\.|\n|$)/);
-  if (nearM) extracted.landmark = nearM[1].trim();
-
-  // Image URLs in pasted text
-  const imgUrls = raw.match(/https?:\/\/[^\s]+\.(?:jpg|jpeg|png|webp)/gi);
-  if (imgUrls) {
-    imgUrls.forEach(url => {
-      if (!gallery.find(g => g.url === url)) gallery.push({ type: 'url', url, id: uid() });
-    });
-    renderGallery();
-  }
-
-  // Amenities
-  const amenityKws = ['gym','swimming pool','pool','lift','elevator','security','cctv','club house','clubhouse','garden','power backup','intercom','children play area','jogging track','tennis court','basketball court','covered parking'];
-  amenityKws.forEach(a => {
-    if (raw.toLowerCase().includes(a) && !amenityList.includes(a.replace(/\b\w/g, c => c.toUpperCase()))) {
-      addAmenity(a.replace(/\b\w/g, c => c.toUpperCase()));
+  // Building Name / Property Name
+  const boldTexts = raw.match(/\*([^\*\n]{3,})\*/g);
+  if (boldTexts) {
+    for (const btRaw of boldTexts) {
+      const bt = btRaw.replace(/\*/g, '').trim();
+      if (bt.toLowerCase() !== (extracted.locality || '').toLowerCase() && !bt.includes('maps.app.goo.gl')) {
+        extracted.building_name = bt;
+        break;
+      }
     }
-  });
+  }
 
-  // Auto-generate title if we have enough info
-  if (!document.getElementById('title').value && extracted.bhk && (extracted.city || document.getElementById('city').value)) {
+  // Auto-generate title
+  if (!document.getElementById('title').value && extracted.bhk) {
     const pt = document.getElementById('property_type').value || 'Property';
-    const loc = document.getElementById('locality').value || extracted.locality || '';
-    const cty = extracted.city || document.getElementById('city').value || '';
-    if (loc || cty) {
-      extracted.title = `${extracted.bhk} ${pt}${loc ? ' • ' + loc : ''}${cty ? ', ' + cty : ''}`;
-    }
+    const loc = extracted.locality || document.getElementById('locality').value || '';
+    extracted.title = `${extracted.bhk} ${pt}${loc ? ' • ' + loc : ''}`;
   }
+
 
   // Apply to form
   const fieldMap = {

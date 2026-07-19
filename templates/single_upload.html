@@ -325,6 +325,7 @@ function showToast(msg) {
 // ── Smart Paste (mirrors admin_property.html logic) ───────
 const _mappedSingle = new Set();
 
+
 async function runPasteMapping() {
   const raw = document.getElementById('raw_paste').value.trim();
   if (!raw) { showToast('Paste some property text first.'); return; }
@@ -334,130 +335,101 @@ async function runPasteMapping() {
 
   const extracted = {};
 
-  // BHK
-  const bhkM = raw.match(/(\d)\s*(?:bhk|bedroom)/i);
-  let bhkStr = '';
-  if (bhkM) bhkStr = bhkM[1] + ' BHK';
+  function normalizeNumber(s) {
+    if (!s) return '';
+    s = s.toLowerCase().replace(/[₹rs\.\s,]/g, '').trim();
+    let num = parseFloat(s);
+    if (isNaN(num)) return s;
+    if (s.includes('k')) num *= 1000;
+    else if (s.includes('l')) num *= 100000;
+    else if (s.includes('cr')) num *= 10000000;
+    return String(Math.round(num));
+  }
 
-  // Price / Rent (handles comma-formatted numbers)
-  const croreM = raw.match(/(?:₹\s*)?(\d+(?:\.\d+)?)\s*(?:cr|crore)/i);
-  const lakhM  = raw.match(/(?:₹\s*)?(\d+(?:\.\d+)?)\s*(?:l|lakh|lakhs)/i);
-  const rentM  = raw.match(/(?:₹\s*|rs\.?\s*)([\d,]+)\s*(?:\/\s*(?:month|mon|mo|pm))?/i);
-  if (croreM)      extracted.rent = String(Math.round(parseFloat(croreM[1]) * 1e7));
-  else if (lakhM)  extracted.rent = String(Math.round(parseFloat(lakhM[1]) * 1e5));
-  else if (rentM)  extracted.rent = rentM[1].replace(/,/g, '');
+  // 1. Rent / Price
+  const rentM = raw.match(/rent\s*[:\-–]?\s*([₹rs\.\s]*[\d,kL\.]+)/i);
+  if (rentM) {
+    extracted.rent = normalizeNumber(rentM[1]);
+  } else {
+    const croreM = raw.match(/([\d\.]+)\s*(?:cr|crore)/i);
+    const lakhM = raw.match(/([\d\.]+)\s*(?:l|lakh|lakhs)/i);
+    if (croreM) extracted.rent = String(Math.round(parseFloat(croreM[1]) * 1e7));
+    else if (lakhM) extracted.rent = String(Math.round(parseFloat(lakhM[1]) * 1e5));
+  }
 
-  // Deposit (handles comma-formatted)
-  const depositM = raw.match(/deposit[:\s₹]*([\d,]+)/i);
-  if (depositM) extracted.deposit = depositM[1].replace(/,/g, '');
+  // 2. Deposit
+  const depositM = raw.match(/deposit\s*[:\-–]?\s*([₹rs\.\s]*[\d,kL\.]+)/i);
+  if (depositM) extracted.deposit = normalizeNumber(depositM[1]);
 
-  // Maintenance (handles comma-formatted)
-  const maintM = raw.match(/maintenance[:\s₹]*([\d,]+)/i);
-  if (maintM) extracted.maintenance = maintM[1].replace(/,/g, '');
+  // 3. Maintenance
+  const maintM = raw.match(/maintenance\s*[:\-–]?\s*([₹rs\.\s]*[\d,kL\.]+)/i);
+  if (maintM) extracted.maintenance = normalizeNumber(maintM[1]);
 
-  // Area → sqft (handles "1,280 sq ft", "1280sqft", "1280 square feet")
-  const areaM = raw.match(/([\d,]+(?:\.\d+)?)\s*(?:sqft|sq\.?\s*ft\.?|square\s*feet)/i);
+  // 4. Area / Sqft
+  const areaM = raw.match(/(?:sqft|area|size)\s*[:\-–]?\s*([\d,]+(?:\.[\d]+)?)/i) || 
+                raw.match(/([\d,]+(?:\.[\d]+)?)\s*(?:sqft|sq\.?\s*ft\.?|square\s*feet)/i);
   if (areaM) extracted.sqft = areaM[1].replace(/,/g, '');
 
-  // Floor
-  const floorM = raw.match(/(\d+)(?:st|nd|rd|th)?\s*floor/i);
+  // 5. Floor
+  const floorM = raw.match(/floor\s*[:\-–]?\s*([\d/]+)/i) || 
+                 raw.match(/(\d+)(?:st|nd|rd|th)?\s*floor/i);
   if (floorM) extracted.floor = floorM[1];
 
-  // Furnishing / Permission status
-  // "semi permitted" / "semi furnished" → Semi-Furnished
-  // "fully furnished" / "fully permitted" → Fully Furnished
-  if (/fully\s*(?:furnished|permitted)/i.test(raw))           extracted.furnishing = 'Fully Furnished';
-  else if (/semi[\s-]*(?:furnished|permitted)/i.test(raw))    extracted.furnishing = 'Semi-Furnished';
-  else if (/unfurnished|bare[\s-]*shell/i.test(raw))          extracted.furnishing = 'Unfurnished';
+  // 6. BHK
+  const bhkM = raw.match(/(\d)\s*(?:bhk|bedroom)/i);
+  let bhkStr = '';
+  if (bhkM) {
+    bhkStr = bhkM[1] + ' BHK';
+    extracted.bhk = bhkStr;
+  }
 
-  // Availability: past/current → "Immediate"; future → keep the date string
-  if (/ready\s*to\s*(?:move|occupy)|immediate|vacant|available\s*now/i.test(raw)) {
-    extracted.available_from = 'Immediate';
-  } else {
-    const mo = 'jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?';
-    const datePatterns = [
-      /available\s*(?:from)?\s*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i,
-      new RegExp(`available\\s*(?:from)?\\s*(\\d{1,2}\\s*(?:${mo})\\s*\\d{2,4})`, 'i'),
-      new RegExp(`(?:from|after)\\s*((?:${mo})\\s+\\d{4})`, 'i'),
-      /(\d{4}-\d{2}-\d{2})/,
-    ];
-    for (const pat of datePatterns) {
-      const m = raw.match(pat);
-      if (m) {
-        const d = new Date(m[1]);
-        extracted.available_from = (!isNaN(d) && d <= new Date()) ? 'Immediate' : m[1].trim();
+  // 7. Furnishing
+  if (/fully\s*(?:furnished|permitted)/i.test(raw)) extracted.furnishing = 'Fully Furnished';
+  else if (/semi[\s-]*(?:furnished|permitted)/i.test(raw)) extracted.furnishing = 'Semi-Furnished';
+  else if (/unfurnished|bare[\s-]*shell/i.test(raw)) extracted.furnishing = 'Unfurnished';
+
+  // 8. Available From
+  const availM = raw.match(/available\s*(?:from)?\s*[:\-–]?\s*([^\n,]+)/i);
+  if (availM) extracted.available_from = availM[1].trim();
+
+  // 9. Preferred Tenant
+  if (/\b(?:family|families)\b/i.test(raw) && /working|professional/i.test(raw)) extracted.preferred_tenant = 'Family / Working Professionals';
+  else if (/\b(?:family|families)\b/i.test(raw)) extracted.preferred_tenant = 'Family';
+  else if (/working|professional/i.test(raw)) extracted.preferred_tenant = 'Working Professionals';
+  else if (/anyone|any/i.test(raw)) extracted.preferred_tenant = 'Anyone';
+
+  // 10. Pets
+  if (/pets\s*[:\-–]?\s*(?:allowed|yes)/i.test(raw)) extracted.pets = 'Allowed';
+  else if (/pets\s*[:\-–]?\s*(?:not allowed|no)/i.test(raw)) extracted.pets = 'Not Allowed';
+
+  // 11. Community
+  if (/community\s*[:\-–]?\s*gated|gated\s*community/i.test(raw)) extracted.community = 'Gated';
+
+  // 12. Location & Property Name
+  const locM = raw.match(/location\s*[:\-–]?\s*\*?([^\*\n]+)\*?/i);
+  if (locM) extracted.location = locM[1].trim();
+
+  const boldTexts = raw.match(/\*([^\*\n]{3,})\*/g);
+  if (boldTexts) {
+    for (const btRaw of boldTexts) {
+      const bt = btRaw.replace(/\*/g, '').trim();
+      if (bt.toLowerCase() !== (extracted.location || '').toLowerCase() && !bt.includes('maps.app.goo.gl')) {
+        extracted.property_name = bt;
         break;
       }
     }
   }
 
-  // Google Maps URL → map_link (then geocode below)
+  // 13. Links
   const mapsM = raw.match(/https?:\/\/(?:maps\.google\.com|goo\.gl\/maps|maps\.app\.goo\.gl|www\.google\.com\/maps)[^\s]*/i);
   if (mapsM) extracted.map_link = mapsM[0];
 
-  // Image URLs → gallery_link hint
-  const imgUrls = raw.match(/https?:\/\/[^\s]+\.(?:jpg|jpeg|png|webp)/gi);
-  if (imgUrls && imgUrls.length) extracted.gallery_link = imgUrls[0];
-
-  // Location / locality — explicit patterns first, city list fallback
-  const localityPatterns = [
-    /(?:located?\s+(?:in|at)|location\s*[:–\-]|area\s*[:–\-]|locality\s*[:–\-])\s*([A-Za-z][a-zA-Z\s]{2,30}?)(?:,|\.|\n|bangalore|bengaluru|mumbai|delhi|hyderabad|chennai|pune|$)/i,
-    /\bin\s+([A-Z][a-zA-Z\s]{2,25}?)\s+(?:bangalore|bengaluru|mumbai|delhi|hyderabad|chennai|pune)/i,
-  ];
-  for (const pat of localityPatterns) {
-    const m = raw.match(pat);
-    if (m && m[1].trim().length > 2) { extracted.location = m[1].trim(); break; }
-  }
-  if (!extracted.location) {
-    const cities = ['bengaluru','bangalore','mumbai','delhi','hyderabad','chennai','pune','kolkata','ahmedabad','surat','jaipur','noida','gurgaon','gurugram'];
-    const cityFound = cities.find(c => raw.toLowerCase().includes(c));
-    if (cityFound) {
-      const cityAliases = { bangalore: 'Bengaluru', gurugram: 'Gurgaon' };
-      extracted.location = cityAliases[cityFound] || (cityFound[0].toUpperCase() + cityFound.slice(1));
-    }
-  }
-
-  // Society / apartment name from text
-  const societyPatterns = [
-    /(?:society|apartment|complex|building|tower|residences|residency|project)\s*[:–\-]\s*([A-Za-z][a-zA-Z\s]{3,40}?)(?:,|\.|\n|$)/i,
-    /\bat\s+([A-Z][a-zA-Z\s]{3,40}?)\s+(?:society|apartment|residences|towers|residency)/i,
-    /([A-Z][a-zA-Z\s]{3,40}?)\s+(?:Society|Apartment|Residences|Towers|Residency)\b/,
-  ];
-  for (const pat of societyPatterns) {
-    const m = raw.match(pat);
-    if (m) { extracted.property_name = m[1].trim(); break; }
-  }
-
-  // Preferred tenant
-  if (/\b(?:family|families)\b/i.test(raw) && /working|professional/i.test(raw)) extracted.preferred_tenant = 'Family / Working Professionals';
-  else if (/\b(?:family|families)\b/i.test(raw)) extracted.preferred_tenant = 'Family';
-  else if (/working|professional/i.test(raw)) extracted.preferred_tenant = 'Working Professionals';
-
-  // Auto-generate title if empty
-  if (!document.getElementById('title').value && bhkStr) {
+  // 14. Title
+  if (bhkStr) {
     const loc = extracted.location || '';
     extracted.title = loc ? `${bhkStr} Property • ${loc}` : `${bhkStr} Property`;
   }
 
-  // Geocode Maps URL via backend → overrides/fills location + society
-  if (extracted.map_link) {
-    try {
-      const geo = await fetch('/api/geocode-location', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ maps_url: extracted.map_link }),
-      });
-      const gd = await geo.json();
-      if (gd.success) {
-        // Place name (building/society) from URL → property_name field
-        if (gd.place_name && !extracted.property_name) extracted.property_name = gd.place_name;
-        if (gd.establishment && !extracted.property_name) extracted.property_name = gd.establishment;
-        // Locality from geocoding → location field (prefer geocoded over regex)
-        if (gd.locality) extracted.location = gd.locality;
-        else if (gd.city && !extracted.location) extracted.location = gd.city;
-      }
-    } catch (_) { /* non-blocking */ }
-  }
 
   // Field ID map: extracted key → form element ID
   const fieldMap = {

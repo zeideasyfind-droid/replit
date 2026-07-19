@@ -1,6 +1,7 @@
 from datetime import datetime, date
 import re
 import random
+from .smart_parser import parse_property_text
 
 
 def normalize_availability(date_str):
@@ -62,19 +63,15 @@ def canonical_normalize_property(raw_data):
     # 1. Handle Property Name (unify Society/Apartment)
     property_name = (
         raw_data.get("property_name") or 
+        raw_data.get("building_name") or 
         raw_data.get("society") or 
         raw_data.get("apartment") or 
-        raw_data.get("building_name") or 
         ""
     ).strip()
 
     # 2. Location Normalization
-    # Preference: micro-location (locality) if informative, else full location
     locality = raw_data.get("locality", "").strip()
     location_field = raw_data.get("location", "").strip()
-    
-    # Use locality if it's present and looks like a micro-location
-    # If locality is empty, fallback to location_field
     normalized_location = locality if locality else location_field
 
     # 3. Basic Fields
@@ -83,7 +80,6 @@ def canonical_normalize_property(raw_data):
         bhk = f"{bhk} BHK"
         
     furnishing = raw_data.get("furnishing", "Semi-Furnished").strip()
-    # Standardize furnishing strings
     if "fully" in furnishing.lower():
         furnishing = "Fully Furnished"
     elif "semi" in furnishing.lower():
@@ -97,15 +93,15 @@ def canonical_normalize_property(raw_data):
         "location": normalized_location,
         "city": raw_data.get("city", "").strip(),
         "bhk": bhk,
-        "rent": raw_data.get("rent", "N/A"),
+        "rent": raw_data.get("rent", raw_data.get("price", "N/A")),
         "maintenance": raw_data.get("maintenance", "N/A"),
         "deposit": raw_data.get("deposit", "N/A"),
-        "sqft": raw_data.get("sqft", "N/A"),
+        "sqft": raw_data.get("sqft", raw_data.get("area_super", "N/A")),
         "floor": raw_data.get("floor", "N/A"),
         "furnishing": furnishing,
-        "bathrooms": raw_data.get("bathrooms", "").strip(),
-        "balcony": raw_data.get("balcony", "").strip(),
-        "utility": raw_data.get("utility", "").strip(),
+        "bathrooms": str(raw_data.get("bathrooms", "")).strip(),
+        "balcony": str(raw_data.get("balcony", "")).strip(),
+        "utility": str(raw_data.get("utility", "")).strip(),
         "available_from": normalize_availability(raw_data.get("available_from", "")),
         "preferred_tenant": normalize_tenant_preference(
             raw_data.get("preferred_tenant", "Anyone"),
@@ -114,16 +110,12 @@ def canonical_normalize_property(raw_data):
         "pets": raw_data.get("pets", "Not Allowed"),
         "community": raw_data.get("community", "Gated"),
         "gallery_link": raw_data.get("gallery_link", ""),
-        "map_link": raw_data.get("map_link", ""),
+        "map_link": raw_data.get("map_link", raw_data.get("maps_link", "")),
         "description": raw_data.get("description", ""),
     }
 
 
 def render_meta_title(norm_prop):
-    """
-    Meta Catalogue title: structured and concise.
-    Example: Semi Furnished | 2BHK | Varthur
-    """
     parts = []
     if norm_prop["furnishing"]:
         parts.append(norm_prop["furnishing"])
@@ -136,10 +128,6 @@ def render_meta_title(norm_prop):
 
 
 def render_whatsapp_title(norm_prop):
-    """
-    WhatsApp title: human-readable and descriptive.
-    Example: Semi-Furnished 2 BHK, 2 Bathrooms, 2 Balconies & Utility
-    """
     title_parts = []
     if norm_prop["furnishing"]:
         title_parts.append(norm_prop["furnishing"])
@@ -160,7 +148,6 @@ def render_whatsapp_title(norm_prop):
         extras.append(f"{val} {suffix}")
         
     if norm_prop["utility"]:
-        # If utility is just a flag or text, handle accordingly
         u = norm_prop["utility"].lower()
         if u in ("yes", "true", "1", "available", "utility"):
             extras.append("Utility")
@@ -177,9 +164,6 @@ def render_whatsapp_title(norm_prop):
 
 
 def render_meta_description(norm_prop):
-    """
-    Meta Catalogue description: line-by-line structured description.
-    """
     lines = [
         render_meta_title(norm_prop),
         f"Price: ₹{norm_prop['rent']}",
@@ -206,7 +190,6 @@ def render_meta_description(norm_prop):
 
 
 def format_whatsapp_message(raw_data):
-    """Format a single property into WhatsApp message format using canonical normalizer."""
     norm_prop = canonical_normalize_property(raw_data)
     title = render_whatsapp_title(norm_prop)
 
@@ -238,19 +221,9 @@ def format_whatsapp_message(raw_data):
 
 
 def generate_drive_folder_name(raw_data):
-    """
-    Generate Drive folder name following EasyFind format:
-    EFF-{numeric}-{property_name OR location}
-    """
     norm_prop = canonical_normalize_property(raw_data)
-    
     numeric_id = str(random.randint(100, 999))
-    
-    if norm_prop["property_name"]:
-        base_name = norm_prop["property_name"]
-    else:
-        base_name = norm_prop["location"]
-
+    base_name = norm_prop["property_name"] if norm_prop["property_name"] else norm_prop["location"]
     folder_name = f"EFF-{numeric_id}-{base_name}"
     folder_name = re.sub(r"[^a-zA-Z0-9\s\-]", "", folder_name)
     folder_name = re.sub(r"\s+", " ", folder_name).strip()
