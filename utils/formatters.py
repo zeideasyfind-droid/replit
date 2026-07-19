@@ -1,8 +1,29 @@
+"""Formatter shim — delegates all real work to property_normalizer.py.
+This file is kept for backwards compatibility but all formatting logic
+has been moved to utils/property_normalizer.py.
+
+DELETED: format_title_with_utility() — was incompatible with canonical spec.
+"""
 from datetime import datetime, date
 import re
 import random
-from .smart_parser import parse_property_text
 
+from .property_normalizer import (
+    parse_raw_property_dump,
+    normalize_property,
+    parsed_to_normalized,
+    build_meta_title,
+    build_meta_description,
+    build_whatsapp_caption,
+    build_whatsapp_title,
+    build_whatsapp_message,
+    NormalizedProperty,
+)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Legacy helpers (kept for API compatibility)
+# ─────────────────────────────────────────────────────────────────────────────
 
 def normalize_availability(date_str):
     if not date_str:
@@ -21,137 +42,67 @@ def normalize_availability(date_str):
     return date_str.title()
 
 
-def normalize_tenant_preference(tenant_str, diet_pref=None):
-    tenant_str = str(tenant_str).lower() if tenant_str else ""
-    has_family = "family" in tenant_str or "families" in tenant_str
-    has_professional = any(t in tenant_str for t in ["working", "professional"])
-    has_anyone = any(t in tenant_str for t in ["anyone", "any", "open", "all"])
-    if has_anyone or (not has_family and not has_professional):
-        result = "Anyone"
-    else:
-        parts = []
-        if has_family:
-            parts.append("Families")
-        if has_professional:
-            parts.append("Working Professionals")
-        result = " / ".join(parts) if parts else "Anyone"
-    if diet_pref:
-        diet_pref = str(diet_pref).lower().strip()
-        if "vegetarian" in diet_pref and "non" not in diet_pref:
-            result += ", Vegetarian"
-        elif "non-vegetarian" in diet_pref or "non veg" in diet_pref:
-            result += ", Non-Vegetarian"
-    return result
+def canonical_normalize_property(raw_data: dict) -> NormalizedProperty:
+    """Delegates to property_normalizer.normalize_property.
+    Handles both legacy field names and canonical field names.
+    """
+    # Map legacy field names to canonical
+    mapped = dict(raw_data)
+    if 'sqft' in mapped and 'area_sqft' not in mapped:
+        mapped['area_sqft'] = mapped.pop('sqft')
+    if 'map_link' in mapped and 'google_maps_link' not in mapped:
+        mapped['google_maps_link'] = mapped.pop('map_link')
+    if 'maps_link' in mapped and 'google_maps_link' not in mapped:
+        mapped['google_maps_link'] = mapped.pop('maps_link')
+    if 'community' in mapped and 'community_type' not in mapped:
+        mapped['community_type'] = mapped.pop('community')
+    # building_name -> property_name fallback
+    if not mapped.get('property_name') and mapped.get('building_name'):
+        mapped['property_name'] = mapped['building_name']
+    # locality / location merge
+    if not mapped.get('location') and mapped.get('locality'):
+        loc_parts = [mapped['locality']]
+        if mapped.get('city'):
+            loc_parts.append(mapped['city'])
+        mapped['location'] = ', '.join(filter(None, loc_parts))
+    return normalize_property(mapped)
 
 
-def canonical_normalize_property(raw_data):
-    property_name = (
-        raw_data.get("property_name") or 
-        raw_data.get("building_name") or 
-        ""
-    ).strip()
-    locality = raw_data.get("locality", "").strip()
-    location_field = raw_data.get("location", "").strip()
-    normalized_location = locality if locality else location_field
-    bhk = str(raw_data.get("bhk", "")).upper().strip()
-    if bhk and "BHK" not in bhk:
-        bhk = f"{bhk} BHK"
-    furnishing = raw_data.get("furnishing", "Semi-Furnished").strip()
-    return {
-        "property_id": raw_data.get("property_id", ""),
-        "property_name": property_name,
-        "location": normalized_location,
-        "city": raw_data.get("city", "").strip(),
-        "bhk": bhk,
-        "rent": raw_data.get("rent", raw_data.get("price", "N/A")),
-        "maintenance": raw_data.get("maintenance", "N/A"),
-        "deposit": raw_data.get("deposit", "N/A"),
-        "sqft": raw_data.get("sqft", raw_data.get("area_super", "N/A")),
-        "floor": raw_data.get("floor", "N/A"),
-        "furnishing": furnishing,
-        "bathrooms": str(raw_data.get("bathrooms", "")).strip(),
-        "balcony": str(raw_data.get("balcony", "")).strip(),
-        "utility": str(raw_data.get("utility", "")).strip(),
-        "available_from": normalize_availability(raw_data.get("available_from", "")),
-        "preferred_tenant": normalize_tenant_preference(
-            raw_data.get("preferred_tenant", "Anyone"),
-            raw_data.get("diet_preference", "")
-        ),
-        "pets": raw_data.get("pets", "Not Allowed"),
-        "community": raw_data.get("community", "Gated"),
-        "gallery_link": raw_data.get("gallery_link", ""),
-        "map_link": raw_data.get("map_link", raw_data.get("maps_link", "")),
-        "description": raw_data.get("description", ""),
-        "raw_title": raw_data.get("title", "")
-    }
+def render_meta_title(norm_prop) -> str:
+    """Delegates to build_meta_title from property_normalizer."""
+    if isinstance(norm_prop, dict):
+        norm_prop = canonical_normalize_property(norm_prop)
+    return build_meta_title(norm_prop)
 
 
-def render_meta_title(norm_prop):
-    """Meta Title: Furnishing BHK - Location"""
-    furnish = norm_prop["furnishing"]
-    bhk = norm_prop["bhk"].replace(" ", "")
-    loc = norm_prop["location"]
-    return f"{furnish} {bhk} - {loc}"
+def render_meta_description(norm_prop) -> str:
+    """Delegates to build_meta_description from property_normalizer."""
+    if isinstance(norm_prop, dict):
+        norm_prop = canonical_normalize_property(norm_prop)
+    return build_meta_description(norm_prop)
 
 
-def render_whatsapp_title(norm_prop):
-    """WhatsApp Title: Use the descriptive title from the first line"""
-    return norm_prop["raw_title"]
+def render_whatsapp_title(norm_prop) -> str:
+    """Delegates to build_whatsapp_title from property_normalizer."""
+    if isinstance(norm_prop, dict):
+        norm_prop = canonical_normalize_property(norm_prop)
+    return build_whatsapp_title(norm_prop)
 
 
-def render_meta_description(norm_prop):
-    lines = [
-        render_meta_title(norm_prop),
-        f"Price: ₹{norm_prop['rent']}",
-        f"Maintenance: ₹{norm_prop['maintenance']}",
-        f"Deposit: ₹{norm_prop['deposit']}",
-        f"Area: {norm_prop['sqft']} Sq. Ft.",
-        f"Floor: {norm_prop['floor']}",
-        f"Furnishing: {norm_prop['furnishing']}",
-        f"Available From: {norm_prop['available_from']}",
-        f"Preferred Tenant: {norm_prop['preferred_tenant']}",
-        f"Pets: {norm_prop['pets']}",
-        f"Community: {norm_prop['community']}",
-        f"Location: {norm_prop['location']}, {norm_prop['city']}",
-    ]
-    if norm_prop["property_name"]:
-        lines.append(f"Society: {norm_prop['property_name']}")
-    if norm_prop["map_link"]:
-        lines.append("")
-        lines.append(f"📍 Map: {norm_prop['map_link']}")
-    return "\n".join(lines)
-
-
-def format_whatsapp_message(raw_data):
+def format_whatsapp_message(raw_data: dict) -> str:
+    """Full WhatsApp caption from a raw data dict. Delegates to property_normalizer."""
     norm_prop = canonical_normalize_property(raw_data)
-    title = render_whatsapp_title(norm_prop)
-    lines = [
-        f"*{title}*",
-        "",
-        f"Rent: ₹{norm_prop['rent']}",
-        f"Maintenance: ₹{norm_prop['maintenance']}",
-        f"Deposit: ₹{norm_prop['deposit']}",
-        f"Area: {norm_prop['sqft']} Sq. Ft.",
-        f"Floor: {norm_prop['floor']}",
-        f"Available From: {norm_prop['available_from']}",
-        f"Preferred Tenant: {norm_prop['preferred_tenant']}",
-        f"Pets: {norm_prop['pets']}",
-        f"Community: {norm_prop['community']}",
-        f"Location: *{norm_prop['location']}*",
-    ]
-    if norm_prop["gallery_link"]:
-        lines += ["", f"📸 *Gallery:* {norm_prop['gallery_link']}"]
-    if norm_prop["property_name"]:
-        lines += ["", f"*{norm_prop['property_name']}*"]
-    if norm_prop["map_link"]:
-        lines.append(f"📍 Map: {norm_prop['map_link']}")
-    return "\n".join(lines)
+    return build_whatsapp_caption(norm_prop)
 
 
-def generate_drive_folder_name(raw_data):
+def generate_drive_folder_name(raw_data: dict) -> str:
+    """Drive folder name uses property_name only (no society/apartment fallback)."""
     norm_prop = canonical_normalize_property(raw_data)
     numeric_id = str(random.randint(100, 999))
-    base_name = norm_prop["property_name"] if norm_prop["property_name"] else norm_prop["location"]
+    # Use property_name only
+    base_name = norm_prop.property_name if norm_prop.property_name else norm_prop.meta_location or norm_prop.location
+    if not base_name:
+        base_name = "Property"
     folder_name = f"EFF-{numeric_id}-{base_name}"
     folder_name = re.sub(r"[^a-zA-Z0-9\s\-]", "", folder_name)
     folder_name = re.sub(r"\s+", " ", folder_name).strip()
