@@ -99,6 +99,17 @@
       font-weight: 600;
     }
     .copy-btn:hover { background: #1a5fbf; }
+    .review-banner {
+      background: #fffbe6;
+      border: 1px solid #f59e0b;
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      font-size: 12px;
+      color: #92400e;
+      margin-top: 10px;
+    }
+    .review-banner strong { display: block; margin-bottom: 4px; }
+    .mapped-highlight { background: #fffbe6 !important; }
   </style>
 </head>
 <body>
@@ -109,7 +120,7 @@
     <div class="sub">Single Property Upload</div>
   </div>
   <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
-    <a href="/" style="font-size:13px;color:var(--muted);text-decoration:none">← Home</a>
+    <a href="/" style="font-size:13px;color:var(--muted);text-decoration:none">&larr; Home</a>
   </div>
 </header>
 
@@ -117,27 +128,28 @@
 
   <!-- Stepper -->
   <div class="stepper">
-    <div class="stepper-item active" id="stp-1">1 · Details</div>
-    <div class="stepper-item" id="stp-2">2 · Photos</div>
-    <div class="stepper-item" id="stp-3">3 · Preview</div>
-    <div class="stepper-item" id="stp-4">4 · Download</div>
+    <div class="stepper-item active" id="stp-1">1 &middot; Details</div>
+    <div class="stepper-item" id="stp-2">2 &middot; Photos</div>
+    <div class="stepper-item" id="stp-3">3 &middot; Preview</div>
+    <div class="stepper-item" id="stp-4">4 &middot; Download</div>
   </div>
 
-  <!-- ── Step 1: Property Details ───────────────────────── -->
+  <!-- Step 1: Property Details -->
   <div class="step-panel visible" id="panel-1">
 
-    <!-- ── Raw Paste Block ──────────────────────────────── -->
+    <!-- Raw Paste Block -->
     <div class="section">
-      <div class="section-head"><div class="section-badge">💡</div><h2>Smart Paste <span style="font-weight:400;font-size:12px;color:var(--muted);text-transform:none">— paste any raw property description and fields will be auto-filled</span></h2></div>
+      <div class="section-head"><div class="section-badge">&#x1F4CB;</div><h2>Raw Property Data Dump <span style="font-weight:400;font-size:12px;color:var(--muted);text-transform:none">&mdash; paste any raw WhatsApp/broker listing and fields will be auto-filled via server parser</span></h2></div>
       <div class="section-body">
         <div class="form-group">
-          <textarea id="raw_paste" rows="5" style="width:100%;font-size:13px;resize:vertical" placeholder="Paste a WhatsApp forward, broker listing, or any unstructured property text here and click Map Fields…"></textarea>
+          <textarea id="raw_paste" rows="6" style="width:100%;font-size:13px;resize:vertical" placeholder="Paste a WhatsApp forward, broker listing, or any unstructured property text here and click Map Fields&hellip;"></textarea>
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
-          <button type="button" class="btn btn-secondary" onclick="runPasteMapping()">⚡ Map Fields</button>
-          <button type="button" class="btn btn-secondary" onclick="clearMapped()">✕ Clear Mapped</button>
+          <button type="button" class="btn btn-secondary" onclick="runPasteMapping()">&#x26A1; Map Fields</button>
+          <button type="button" class="btn btn-secondary" onclick="clearMapped()">&#x2715; Clear Mapped</button>
         </div>
         <div id="paste-result" style="margin-top:10px;font-size:12px;color:var(--muted)"></div>
+        <div id="review-warnings"></div>
       </div>
     </div>
 
@@ -150,20 +162,20 @@
             <input type="text" id="title" placeholder="e.g. Fully Furnished 2 BHK with 2 Bathrooms &amp; 1 Balcony">
           </div>
           <div class="form-group fg-third">
-            <label for="rent">Rent (₹) <span class="req">*</span></label>
-            <input type="number" id="rent" placeholder="45000">
+            <label for="rent">Rent <span class="req">*</span></label>
+            <input type="text" id="rent" placeholder="60k or 45000">
           </div>
           <div class="form-group fg-third">
-            <label for="maintenance">Maintenance (₹) <span class="req">*</span></label>
-            <input type="number" id="maintenance" placeholder="2500">
+            <label for="maintenance">Maintenance</label>
+            <input type="text" id="maintenance" placeholder="5k or Inclusive">
           </div>
           <div class="form-group fg-third">
-            <label for="deposit">Deposit (₹) <span class="req">*</span></label>
-            <input type="number" id="deposit" placeholder="135000">
+            <label for="deposit">Deposit <span class="req">*</span></label>
+            <input type="text" id="deposit" placeholder="2L or 90000">
           </div>
           <div class="form-group fg-third">
-            <label for="sqft">Area (Sq. Ft.) <span class="req">*</span></label>
-            <input type="number" id="sqft" placeholder="1250">
+            <label for="area_sqft">Area (Sq. Ft.) <span class="req">*</span></label>
+            <input type="text" id="area_sqft" placeholder="1250">
           </div>
           <div class="form-group fg-third">
             <label for="floor">Floor <span class="req">*</span></label>
@@ -173,9 +185,24 @@
             <label for="furnishing">Furnishing</label>
             <select id="furnishing">
               <option value="Fully Furnished">Fully Furnished</option>
-              <option value="Semi-Furnished">Semi-Furnished</option>
+              <option value="Semi Furnished">Semi Furnished</option>
               <option value="Unfurnished">Unfurnished</option>
             </select>
+          </div>
+        </div>
+        <!-- Derived fields from title -->
+        <div class="form-grid" style="margin-top:10px">
+          <div class="form-group fg-third">
+            <label for="bhk">BHK <span style="color:var(--muted);font-weight:400">(derived)</span></label>
+            <input type="text" id="bhk" placeholder="2 or 2.5">
+          </div>
+          <div class="form-group fg-third">
+            <label for="bathrooms">Bathrooms <span style="color:var(--muted);font-weight:400">(derived)</span></label>
+            <input type="text" id="bathrooms" placeholder="2">
+          </div>
+          <div class="form-group fg-third">
+            <label for="balconies">Balconies <span style="color:var(--muted);font-weight:400">(derived)</span></label>
+            <input type="text" id="balconies" placeholder="1">
           </div>
         </div>
       </div>
@@ -187,7 +214,7 @@
         <div class="form-grid">
           <div class="form-group fg-third">
             <label for="available_from">Available From <span class="req">*</span></label>
-            <input type="text" id="available_from" placeholder="Immediate or YYYY-MM-DD">
+            <input type="text" id="available_from" placeholder="August 1 or Ready to occupy">
           </div>
           <div class="form-group fg-third">
             <label for="preferred_tenant">Preferred Tenant <span class="req">*</span></label>
@@ -195,34 +222,22 @@
           </div>
           <div class="form-group fg-third">
             <label for="diet_preference">Diet Preference</label>
-            <select id="diet_preference">
-              <option value="">No Preference</option>
-              <option value="Vegetarian">Vegetarian Only</option>
-              <option value="Non-Vegetarian">Non-Vegetarian Only</option>
-            </select>
+            <input type="text" id="diet_preference" placeholder="No Preference">
           </div>
           <div class="form-group fg-third">
             <label for="pets">Pets</label>
-            <select id="pets">
-              <option value="Not Allowed">Not Allowed</option>
-              <option value="Allowed">Allowed</option>
-              <option value="Small Pets Only">Small Pets Only</option>
-            </select>
+            <input type="text" id="pets" placeholder="Not Allowed">
           </div>
           <div class="form-group fg-third">
-            <label for="community">Community Type</label>
-            <select id="community">
-              <option value="Gated">Gated Society</option>
-              <option value="Semi-Gated">Semi-Gated</option>
-              <option value="Non-Society">Non-Society</option>
-            </select>
+            <label for="community_type">Community Type</label>
+            <input type="text" id="community_type" placeholder="Gated">
           </div>
         </div>
       </div>
     </div>
 
     <div class="section">
-      <div class="section-head"><div class="section-badge">C</div><h2>Location &amp; Ownership</h2></div>
+      <div class="section-head"><div class="section-badge">C</div><h2>Location &amp; Property</h2></div>
       <div class="section-body">
         <div class="form-grid">
           <div class="form-group fg-half">
@@ -238,235 +253,195 @@
             <input type="url" id="gallery_link" placeholder="https://drive.google.com/...">
           </div>
           <div class="form-group fg-half">
-            <label for="map_link">Google Maps Link (optional)</label>
-            <input type="url" id="map_link" placeholder="https://maps.google.com/...">
+            <label for="google_maps_link">Google Maps Link (optional)</label>
+            <input type="url" id="google_maps_link" placeholder="https://maps.app.goo.gl/...">
           </div>
         </div>
       </div>
     </div>
 
     <div class="action-bar">
-      <button class="btn btn-primary" onclick="goToPhotos()">Next: Upload Photos →</button>
+      <button class="btn btn-primary" onclick="goToPhotos()">Next: Upload Photos &rarr;</button>
     </div>
   </div>
 
-  <!-- ── Step 2: Photos ─────────────────────────────────── -->
+  <!-- Step 2: Photos -->
   <div class="step-panel" id="panel-2">
     <div class="section">
-      <div class="section-head"><div class="section-badge">📷</div><h2>Property Photos</h2></div>
+      <div class="section-head"><div class="section-badge">&#x1F4F7;</div><h2>Property Photos</h2></div>
       <div class="section-body">
         <div class="drop-zone" id="drop-zone">
-          <div class="dz-icon">📷</div>
+          <div class="dz-icon">&#x1F4F7;</div>
           <div class="dz-title">Click to select or drag &amp; drop images here</div>
-          <div class="dz-hint">JPEG, PNG, WEBP — up to 30 files</div>
+          <div class="dz-hint">JPEG, PNG, WEBP &mdash; up to 30 files</div>
           <input type="file" id="file-input" accept="image/*" multiple>
         </div>
         <div class="image-grid" id="image-grid"></div>
       </div>
     </div>
     <div class="nav-row">
-      <button class="btn btn-secondary" onclick="goTo(1)">← Back</button>
-      <button class="btn btn-primary" onclick="goToPreview()">Next: Preview Message →</button>
+      <button class="btn btn-secondary" onclick="goTo(1)">&larr; Back</button>
+      <button class="btn btn-primary" onclick="goToPreview()">Next: Preview Message &rarr;</button>
     </div>
   </div>
 
-  <!-- ── Step 3: Preview ────────────────────────────────── -->
+  <!-- Step 3: Preview -->
   <div class="step-panel" id="panel-3">
     <div class="section">
-      <div class="section-head"><div class="section-badge">💬</div><h2>WhatsApp Message Preview</h2></div>
+      <div class="section-head"><div class="section-badge">&#x1F4AC;</div><h2>WhatsApp Message Preview</h2></div>
       <div class="section-body">
         <button class="copy-btn" onclick="copyMessage()">Copy</button>
         <div class="preview-box" id="message-preview"></div>
       </div>
     </div>
     <div class="section">
-      <div class="section-head"><div class="section-badge">📁</div><h2>Google Drive Folder Name</h2></div>
+      <div class="section-head"><div class="section-badge">&#x1F4C1;</div><h2>Google Drive Folder Name</h2></div>
       <div class="section-body">
         <div class="folder-pill" id="folder-preview"></div>
       </div>
     </div>
+    <div class="section" id="preview-meta-section" style="display:none">
+      <div class="section-head"><div class="section-badge">&#x1F4E6;</div><h2>Meta Catalogue Title</h2></div>
+      <div class="section-body">
+        <div class="folder-pill" id="meta-title-preview" style="background:#e6f4ea;color:#1a7f45"></div>
+      </div>
+    </div>
     <div class="nav-row">
-      <button class="btn btn-secondary" onclick="goTo(2)">← Back</button>
-      <button class="btn btn-primary" onclick="generate()">✓ Generate &amp; Download</button>
+      <button class="btn btn-secondary" onclick="goTo(2)">&larr; Back</button>
+      <button class="btn btn-primary" onclick="generate()">&#x2713; Generate &amp; Download</button>
     </div>
   </div>
 
-  <!-- ── Step 4: Download ───────────────────────────────── -->
+  <!-- Step 4: Download -->
   <div class="step-panel" id="panel-4">
     <div class="section">
       <div class="section-body" style="text-align:center;padding:32px 16px">
-        <span class="success-icon">✅</span>
+        <span class="success-icon">&#x2705;</span>
         <h2 style="margin:0 0 6px">Generation complete!</h2>
         <p style="color:var(--muted);margin:0 0 4px">Your WhatsApp message and property data are ready.</p>
         <ul class="download-list" id="download-list"></ul>
       </div>
     </div>
     <div class="nav-row">
-      <button class="btn btn-secondary" onclick="goTo(3)">← Back to Preview</button>
-      <a class="btn btn-primary" href="/single_upload">➕ Upload Another</a>
+      <button class="btn btn-secondary" onclick="goTo(3)">&larr; Back to Preview</button>
+      <a class="btn btn-primary" href="/single_upload">&#x2795; Upload Another</a>
     </div>
   </div>
 
 </div>
 
-<footer>EasyFind Property Solutions &copy; 2025 — Internal Admin Tool</footer>
+<footer>EasyFind Property Solutions &copy; 2025 &mdash; Internal Admin Tool</footer>
 <div class="toast" id="toast"></div>
 
 <script>
 const TOKEN = '';
+const _mappedSingle = new Set();
 
-// ── Toast ─────────────────────────────────────────────────
 function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2600);
 }
 
-// ── Smart Paste (mirrors admin_property.html logic) ───────
-const _mappedSingle = new Set();
-
-
-
-
+// ── Server-side Smart Paste ───────────────────────────────
 async function runPasteMapping() {
   const raw = document.getElementById('raw_paste').value.trim();
   if (!raw) { showToast('Paste some property text first.'); return; }
 
   const resultEl = document.getElementById('paste-result');
-  resultEl.textContent = 'Analysing…';
+  const warningsEl = document.getElementById('review-warnings');
+  resultEl.textContent = 'Parsing on server\u2026';
+  warningsEl.innerHTML = '';
 
-  const lines = raw.split('\n').map(l => l.trim()).filter(l => l);
-  const extracted = {};
-
-  function normalizeNumber(s) {
-    if (!s) return '';
-    s = s.toLowerCase().replace(/[₹rs\.\s,]/g, '').trim();
-    let num = parseFloat(s);
-    if (isNaN(num)) return s;
-    if (s.includes('k')) num *= 1000;
-    else if (s.includes('l')) num *= 100000;
-    else if (s.includes('cr')) num *= 10000000;
-    return String(Math.round(num));
-  }
-
-  // 1. Title (First line)
-  if (lines.length > 0) extracted.title = lines[0].replace(/\*/g, '').trim();
-
-  // 2. Furnishing
-  if (/fully\s*(?:furnished|permitted)/i.test(raw)) extracted.furnishing = 'Fully Furnished';
-  else if (/semi[\s-]*(?:furnished|permitted)/i.test(raw)) extracted.furnishing = 'Semi-Furnished';
-  else if (/unfurnished|bare[\s-]*shell/i.test(raw)) extracted.furnishing = 'Unfurnished';
-
-  // 3. Rent
-  const rentM = raw.match(/rent\s*[:\-–]?\s*([₹rs\.\s]*[\d,kL\.]+)/i);
-  if (rentM) extracted.rent = normalizeNumber(rentM[1]);
-
-  // 4. Maintenance
-  const maintM = raw.match(/maintenance\s*[:\-–]?\s*([₹rs\.\s]*[\d,kL\.]+)/i);
-  if (maintM) extracted.maintenance = normalizeNumber(maintM[1]);
-
-  // 5. Deposit
-  const depositM = raw.match(/deposit\s*[:\-–]?\s*([₹rs\.\s]*[\d,kL\.]+)/i);
-  if (depositM) extracted.deposit = normalizeNumber(depositM[1]);
-
-  // 6. Sqft
-  const sqftM = raw.match(/sqft\s*[:\-–]?\s*([\d,]+)/i) || 
-                raw.match(/([\d,]+)\s*(?:sqft|sq\.?\s*ft|square\s*feet)/i);
-  if (sqftM) extracted.sqft = sqftM[1].replace(/,/g, '');
-
-  // 7. Floor
-  const floorM = raw.match(/floor\s*[:\-–]?\s*([^\n,]+)/i);
-  if (floorM) extracted.floor = floorM[1].trim();
-
-  // 8. Available From
-  const availM = raw.match(/available\s*(?:from)?\s*[:\-–]?\s*([^\n,]+)/i);
-  if (availM) extracted.available_from = availM[1].trim();
-
-  // 9. Preferred Tenant
-  const prefM = raw.match(/preferred\s*tenant\s*[:\-–]?\s*([^\n,]+)/i);
-  if (prefM) extracted.preferred_tenant = prefM[1].trim();
-
-  // 10. Diet Preference
-  if (/vegetarian\s*only|only\s*vegetarian/i.test(raw)) extracted.diet_preference = 'Vegetarian';
-  else if (/non-vegetarian|non\s*veg/i.test(raw)) extracted.diet_preference = 'Non-Vegetarian';
-
-  // 11. Pets
-  const petsM = raw.match(/pets\s*[:\-–]?\s*([^\n,]+)/i);
-  if (petsM) {
-    const val = petsM[1].toLowerCase();
-    if (val.includes('allowed') || val.includes('yes')) extracted.pets = 'Allowed';
-    else if (val.includes('not') || val.includes('no')) extracted.pets = 'Not Allowed';
-  }
-
-  // 12. Community
-  const commM = raw.match(/community\s*[:\-–]?\s*([^\n,]+)/i);
-  if (commM) {
-    const val = commM[1].toLowerCase();
-    if (val.includes('gated')) extracted.community = 'Gated';
-    else if (val.includes('semi')) extracted.community = 'Semi-Gated';
-  }
-
-  // 13. Location
-  const locM = raw.match(/location\s*[:\-–]?\s*\*?([^\*\n]+)\*?/i);
-  if (locM) extracted.location = locM[1].trim();
-
-  // 14. Property Name
-  for (let i = 0; i < lines.length; i++) {
-    if (/https?:\/\/(?:maps\.google\.com|goo\.gl\/maps|maps\.app\.goo\.gl)/.test(lines[i])) {
-      if (i > 0) {
-        const potential = lines[i-1].replace(/\*/g, '').trim();
-        if (potential.toLowerCase() !== (extracted.location || '').toLowerCase()) {
-          extracted.property_name = potential;
-          break;
-        }
-      }
+  try {
+    const resp = await fetch('/api/parse-property', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ raw_text: raw }),
+    });
+    const result = await resp.json();
+    if (!result.success) {
+      resultEl.textContent = 'Parse error: ' + result.error;
+      return;
     }
-  }
 
-  // 15. Map Link
-  const mapsM = raw.match(/https?:\/\/(?:maps\.google\.com|goo\.gl\/maps|maps\.app\.goo\.gl|www\.google\.com\/maps)[^\s]*/i);
-  if (mapsM) extracted.map_link = mapsM[0];
+    // Field ID map: API key -> form element ID
+    const fieldMap = {
+      raw_title: 'title',
+      furnishing: 'furnishing',
+      rent: 'rent',
+      maintenance: 'maintenance',
+      deposit: 'deposit',
+      area_sqft: 'area_sqft',
+      floor: 'floor',
+      available_from: 'available_from',
+      preferred_tenant: 'preferred_tenant',
+      diet_preference: 'diet_preference',
+      pets: 'pets',
+      community_type: 'community_type',
+      location: 'location',
+      property_name: 'property_name',
+      gallery_link: 'gallery_link',
+      google_maps_link: 'google_maps_link',
+      bhk: 'bhk',
+      bathrooms: 'bathrooms',
+      balconies: 'balconies',
+    };
 
+    const fields = result.fields || {};
+    const applied = [];
+    Object.entries(fieldMap).forEach(([apiKey, elId]) => {
+      const val = fields[apiKey];
+      if (!val && val !== false) return;
+      const el = document.getElementById(elId);
+      if (!el) return;
+      // Never overwrite already-filled manual input
+      if (el.value && el.value.trim()) return;
+      if (el.tagName === 'SELECT') {
+        for (const opt of el.options) {
+          if (opt.value.toLowerCase() === String(val).toLowerCase()) {
+            el.value = opt.value;
+            break;
+          }
+        }
+      } else {
+        el.value = val;
+      }
+      el.classList.add('mapped-highlight');
+      _mappedSingle.add(elId);
+      applied.push(apiKey);
+    });
 
-  // Field ID map: extracted key → form element ID
-  const fieldMap = {
-    title: 'title', rent: 'rent', maintenance: 'maintenance',
-    deposit: 'deposit', sqft: 'sqft', floor: 'floor',
-    furnishing: 'furnishing', available_from: 'available_from',
-    map_link: 'map_link', gallery_link: 'gallery_link',
-    location: 'location', property_name: 'property_name',
-    preferred_tenant: 'preferred_tenant',
-  };
+    // Show needs_review warnings
+    const allWarnings = [
+      ...(result.needs_review || []),
+      ...(result.unrecognized_lines || []).map(l => 'Unrecognized line: ' + l),
+    ];
+    if (allWarnings.length) {
+      warningsEl.innerHTML = '<div class="review-banner"><strong>\u26A0\uFE0F Needs review:</strong>' +
+        allWarnings.map(w => '<div>\u2022 ' + w + '</div>').join('') + '</div>';
+    }
 
-  const applied = [];
-  Object.entries(extracted).forEach(([key, val]) => {
-    const id = fieldMap[key];
-    if (!id) return;
-    const el = document.getElementById(id);
-    if (!el || el.value) return; // never overwrite already-filled fields
-    el.value = val;
-    el.style.background = '#fffbe6';
-    _mappedSingle.add(id);
-    applied.push(key);
-  });
-
-  if (applied.length) {
-    resultEl.textContent = `✓ Mapped: ${applied.join(', ')}`;
-    showToast(`✓ Mapped ${applied.length} field${applied.length > 1 ? 's' : ''}`);
-  } else {
-    resultEl.textContent = 'Nothing new to map — fields may already be filled or no matching data found.';
-    showToast('Nothing new to map.');
+    if (applied.length) {
+      resultEl.textContent = '\u2713 Mapped: ' + applied.join(', ');
+      showToast('\u2713 Mapped ' + applied.length + ' field' + (applied.length > 1 ? 's' : ''));
+    } else {
+      resultEl.textContent = 'Nothing new to map \u2014 fields may already be filled or no matching data found.';
+    }
+  } catch (err) {
+    resultEl.textContent = 'Request failed: ' + err.message;
   }
 }
 
 function clearMapped() {
   _mappedSingle.forEach(id => {
     const el = document.getElementById(id);
-    if (el) { el.value = ''; el.style.background = ''; }
+    if (el) { el.value = ''; el.classList.remove('mapped-highlight'); }
   });
   _mappedSingle.clear();
   document.getElementById('raw_paste').value = '';
   document.getElementById('paste-result').textContent = '';
+  document.getElementById('review-warnings').innerHTML = '';
   showToast('Cleared mapped fields.');
 }
 
@@ -483,35 +458,40 @@ function goTo(step) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-// ── Collect property data ─────────────────────────────────
+// ── Collect canonical property data ──────────────────────
 function collectData() {
   return {
+    raw_dump: document.getElementById('raw_paste').value.trim(),
     title: document.getElementById('title').value.trim(),
+    raw_title: document.getElementById('title').value.trim(),
+    furnishing: document.getElementById('furnishing').value,
+    bhk: document.getElementById('bhk').value.trim(),
+    bathrooms: document.getElementById('bathrooms').value.trim(),
+    balconies: document.getElementById('balconies').value.trim(),
     rent: document.getElementById('rent').value.trim(),
     maintenance: document.getElementById('maintenance').value.trim(),
     deposit: document.getElementById('deposit').value.trim(),
-    sqft: document.getElementById('sqft').value.trim(),
+    area_sqft: document.getElementById('area_sqft').value.trim(),
     floor: document.getElementById('floor').value.trim(),
-    furnishing: document.getElementById('furnishing').value,
     available_from: document.getElementById('available_from').value.trim(),
     preferred_tenant: document.getElementById('preferred_tenant').value.trim(),
-    diet_preference: document.getElementById('diet_preference').value,
-    pets: document.getElementById('pets').value,
-    community: document.getElementById('community').value,
+    diet_preference: document.getElementById('diet_preference').value.trim(),
+    pets: document.getElementById('pets').value.trim(),
+    community_type: document.getElementById('community_type').value.trim(),
     location: document.getElementById('location').value.trim(),
     property_name: document.getElementById('property_name').value.trim(),
     gallery_link: document.getElementById('gallery_link').value.trim(),
-    map_link: document.getElementById('map_link').value.trim(),
+    google_maps_link: document.getElementById('google_maps_link').value.trim(),
   };
 }
 
-// ── Step 1 → Step 2 ───────────────────────────────────────
+// ── Step 1 \u2192 Step 2 ───────────────────────────────────────
 function goToPhotos() {
   const d = collectData();
-  const required = ['title','rent','maintenance','deposit','sqft','floor','available_from','preferred_tenant','location'];
+  const required = ['rent', 'deposit', 'area_sqft', 'floor', 'available_from', 'preferred_tenant', 'location'];
   for (const key of required) {
     if (!d[key]) {
-      showToast(`Please fill in: ${key.replace(/_/g, ' ')}`);
+      showToast('Please fill in: ' + key.replace(/_/g, ' '));
       document.getElementById(key)?.focus();
       return;
     }
@@ -549,14 +529,14 @@ function addFiles(files) {
   });
 }
 
-// ── Step 2 → Step 3 ───────────────────────────────────────
+// ── Step 2 \u2192 Step 3 ───────────────────────────────────────
 async function goToPreview() {
   if (selectedFiles.length === 0) {
     if (!confirm('No photos selected. Continue without photos?')) return;
   }
   const data = collectData();
   try {
-    const resp = await fetch(`/api/preview-single`, {
+    const resp = await fetch('/api/preview-single', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -565,6 +545,12 @@ async function goToPreview() {
     if (!result.success) { showToast('Error: ' + result.error); return; }
     document.getElementById('message-preview').textContent = result.message;
     document.getElementById('folder-preview').textContent = result.drive_folder_name;
+    const metaSection = document.getElementById('preview-meta-section');
+    const metaEl = document.getElementById('meta-title-preview');
+    if (result.meta_title) {
+      metaEl.textContent = result.meta_title;
+      metaSection.style.display = '';
+    }
     goTo(3);
   } catch (err) {
     showToast('Request failed: ' + err.message);
@@ -573,14 +559,14 @@ async function goToPreview() {
 
 function copyMessage() {
   const text = document.getElementById('message-preview').textContent;
-  navigator.clipboard.writeText(text).then(() => showToast('✓ Copied to clipboard'));
+  navigator.clipboard.writeText(text).then(() => showToast('\u2713 Copied to clipboard'));
 }
 
-// ── Step 3 → Step 4 ───────────────────────────────────────
+// ── Step 3 \u2192 Step 4 ───────────────────────────────────────
 async function generate() {
   const data = collectData();
   try {
-    const resp = await fetch(`/api/generate-single`, {
+    const resp = await fetch('/api/generate-single', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -590,8 +576,8 @@ async function generate() {
 
     const list = document.getElementById('download-list');
     list.innerHTML = `
-      <li><a href="${result.whatsapp_file}" download>📄 WhatsApp Message (.txt)</a></li>
-      <li><a href="${result.json_file}" download>📊 Property Data (.json)</a></li>
+      <li><a href="${result.whatsapp_file}" download>&#x1F4C4; WhatsApp Message (.txt)</a></li>
+      <li><a href="${result.json_file}" download>&#x1F4CA; Property Data (.json)</a></li>
     `;
     goTo(4);
   } catch (err) {

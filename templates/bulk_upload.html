@@ -3,163 +3,68 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bulk Property Upload — EasyFind Admin</title>
+  <title>Bulk Property Upload &mdash; EasyFind Admin</title>
   <link rel="stylesheet" href="/static/style.css">
   <style>
     .stepper {
-      display: flex;
-      gap: 0;
-      margin-bottom: 28px;
-      border-radius: var(--radius);
-      overflow: hidden;
-      border: 1px solid var(--border);
+      display: flex; gap: 0; margin-bottom: 28px;
+      border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border);
     }
     .stepper-item {
-      flex: 1;
-      padding: 12px 8px;
-      text-align: center;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--muted);
-      background: #f8f9fa;
-      border-right: 1px solid var(--border);
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      transition: background 0.15s, color 0.15s;
+      flex: 1; padding: 12px 8px; text-align: center; font-size: 12px; font-weight: 600;
+      color: var(--muted); background: #f8f9fa; border-right: 1px solid var(--border);
+      text-transform: uppercase; letter-spacing: 0.04em; transition: background 0.15s, color 0.15s;
     }
     .stepper-item:last-child { border-right: none; }
     .stepper-item.active { background: var(--primary); color: #fff; }
     .stepper-item.done { background: #1a7f45; color: #fff; }
     .step-panel { display: none; }
     .step-panel.visible { display: block; }
-
     .prop-card {
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      background: #fafbfc;
-      padding: 20px 20px 12px;
-      margin-bottom: 16px;
-      position: relative;
+      border: 1px solid var(--border); border-radius: var(--radius);
+      background: #fafbfc; padding: 20px 20px 12px; margin-bottom: 16px; position: relative;
     }
-    .prop-card-title {
-      font-size: 13px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: var(--primary);
-      margin: 0 0 14px;
-    }
+    .prop-card-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--primary); margin: 0 0 14px; }
     .remove-card-btn {
-      position: absolute;
-      top: 14px;
-      right: 14px;
-      background: #fee2e2;
-      color: #b91c1c;
-      border: none;
-      border-radius: 6px;
-      padding: 4px 10px;
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
+      position: absolute; top: 14px; right: 14px; background: #fee2e2; color: #b91c1c;
+      border: none; border-radius: 6px; padding: 4px 10px; font-size: 12px; font-weight: 600; cursor: pointer;
     }
     .remove-card-btn:hover { background: #fecaca; }
-
-    .preview-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-      gap: 16px;
-      margin-top: 16px;
-    }
-    .preview-card {
-      background: #fff;
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 18px;
-    }
-    .preview-card-title {
-      font-size: 13px;
-      font-weight: 700;
-      margin: 0 0 10px;
-      color: var(--text);
-    }
+    .preview-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; margin-top: 16px; }
+    .preview-card { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; }
+    .preview-card-title { font-size: 13px; font-weight: 700; margin: 0 0 6px; color: var(--text); }
+    .preview-meta-title { font-size: 12px; color: #1a7f45; font-weight: 600; margin: 0 0 10px; }
     .preview-message {
-      background: #f8f9fa;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 12px;
-      font-family: monospace;
-      font-size: 12px;
-      white-space: pre-wrap;
-      line-height: 1.5;
-      max-height: 260px;
-      overflow-y: auto;
-      margin-bottom: 10px;
+      background: #f8f9fa; border: 1px solid var(--border); border-radius: 6px;
+      padding: 12px; font-family: monospace; font-size: 12px; white-space: pre-wrap;
+      line-height: 1.5; max-height: 260px; overflow-y: auto; margin-bottom: 10px;
     }
     .folder-pill {
-      display: inline-block;
-      background: #e8f3ff;
-      color: var(--primary);
-      border-radius: 20px;
-      padding: 4px 12px;
-      font-size: 12px;
-      font-weight: 600;
-      font-family: monospace;
-      word-break: break-all;
+      display: inline-block; background: #e8f3ff; color: var(--primary);
+      border-radius: 20px; padding: 4px 12px; font-size: 12px; font-weight: 600;
+      font-family: monospace; word-break: break-all;
     }
     .copy-small {
-      float: right;
-      font-size: 11px;
-      padding: 3px 8px;
-      background: var(--primary);
-      color: #fff;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      font-weight: 600;
-      margin-bottom: 4px;
+      float: right; font-size: 11px; padding: 3px 8px; background: var(--primary);
+      color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; margin-bottom: 4px;
     }
     .copy-small:hover { background: #1a5fbf; }
-
     .success-icon { font-size: 52px; text-align: center; display: block; margin-bottom: 10px; }
     .download-list { list-style: none; padding: 0; margin: 16px 0 0; display: flex; flex-direction: column; gap: 10px; }
     .download-list a {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 12px 16px;
-      background: #f8f9fa;
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      text-decoration: none;
-      color: var(--primary);
-      font-weight: 600;
-      font-size: 14px;
-      transition: background 0.15s;
+      display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+      background: #f8f9fa; border: 1px solid var(--border); border-radius: var(--radius);
+      text-decoration: none; color: var(--primary); font-weight: 600; font-size: 14px; transition: background 0.15s;
     }
     .download-list a:hover { background: #e8f3ff; }
     .nav-row { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; align-items: center; }
-    .count-badge {
-      background: #e8f3ff;
-      color: var(--primary);
-      border-radius: 20px;
-      padding: 4px 12px;
-      font-size: 13px;
-      font-weight: 700;
-    }
-    .img-upload-row {
-      padding: 10px 14px;
-      background: #f8f9fa;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      margin-bottom: 10px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      font-size: 13px;
-    }
+    .count-badge { background: #e8f3ff; color: var(--primary); border-radius: 20px; padding: 4px 12px; font-size: 13px; font-weight: 700; }
+    .img-upload-row { padding: 10px 14px; background: #f8f9fa; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; display: flex; align-items: center; gap: 12px; font-size: 13px; }
     .img-upload-row label { font-weight: 600; margin: 0; min-width: 220px; flex-shrink: 0; }
     .img-upload-row input { margin: 0; flex: 1; }
     .img-count { font-size: 12px; color: var(--muted); min-width: 60px; }
+    .review-banner { background: #fffbe6; border: 1px solid #f59e0b; border-radius: 6px; padding: 8px 12px; font-size: 11px; color: #92400e; margin-top: 8px; }
+    .mapped-highlight { background: #fffbe6 !important; }
   </style>
 </head>
 <body>
@@ -170,52 +75,50 @@
     <div class="sub">Bulk Property Upload</div>
   </div>
   <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
-    <a href="/" style="font-size:13px;color:var(--muted);text-decoration:none">← Home</a>
+    <a href="/" style="font-size:13px;color:var(--muted);text-decoration:none">&larr; Home</a>
   </div>
 </header>
 
 <div class="container">
 
   <div class="stepper">
-    <div class="stepper-item active" id="stp-1">1 · Add Properties</div>
-    <div class="stepper-item" id="stp-2">2 · Photos</div>
-    <div class="stepper-item" id="stp-3">3 · Preview All</div>
-    <div class="stepper-item" id="stp-4">4 · Download</div>
+    <div class="stepper-item active" id="stp-1">1 &middot; Add Properties</div>
+    <div class="stepper-item" id="stp-2">2 &middot; Photos</div>
+    <div class="stepper-item" id="stp-3">3 &middot; Preview All</div>
+    <div class="stepper-item" id="stp-4">4 &middot; Download</div>
   </div>
 
-  <!-- ── Step 1: Add Properties ─────────────────────────── -->
+  <!-- Step 1: Add Properties -->
   <div class="step-panel visible" id="panel-1">
     <div id="cards-container"></div>
-
     <div style="margin-bottom:24px">
       <button class="btn btn-secondary" onclick="addCard()">+ Add Property</button>
     </div>
-
     <div class="action-bar">
-      <button class="btn btn-primary" onclick="goToPhotos()">Next: Upload Photos →</button>
+      <button class="btn btn-primary" onclick="goToPhotos()">Next: Upload Photos &rarr;</button>
     </div>
   </div>
 
-  <!-- ── Step 2: Photos ─────────────────────────────────── -->
+  <!-- Step 2: Photos -->
   <div class="step-panel" id="panel-2">
     <div class="section">
-      <div class="section-head"><div class="section-badge">📷</div><h2>Upload Property Photos</h2></div>
+      <div class="section-head"><div class="section-badge">&#x1F4F7;</div><h2>Upload Property Photos</h2></div>
       <div class="section-body">
-        <p style="color:var(--muted);margin:0 0 16px;font-size:13px">Select photos for each property. Photos are used for your reference — they are not uploaded to any server in this step.</p>
+        <p style="color:var(--muted);margin:0 0 16px;font-size:13px">Select photos for each property. Photos are used for your reference &mdash; they are not uploaded to any server in this step.</p>
         <div id="bulk-image-uploads"></div>
       </div>
     </div>
     <div class="nav-row">
-      <button class="btn btn-secondary" onclick="goTo(1)">← Back</button>
-      <button class="btn btn-primary" onclick="goToPreview()">Next: Preview All →</button>
+      <button class="btn btn-secondary" onclick="goTo(1)">&larr; Back</button>
+      <button class="btn btn-primary" onclick="goToPreview()">Next: Preview All &rarr;</button>
     </div>
   </div>
 
-  <!-- ── Step 3: Preview All ────────────────────────────── -->
+  <!-- Step 3: Preview All -->
   <div class="step-panel" id="panel-3">
     <div class="section">
       <div class="section-head">
-        <div class="section-badge">💬</div>
+        <div class="section-badge">&#x1F4AC;</div>
         <h2>Preview All Messages</h2>
         <span class="optional" id="preview-count-label"></span>
       </div>
@@ -224,16 +127,16 @@
       </div>
     </div>
     <div class="nav-row">
-      <button class="btn btn-secondary" onclick="goTo(2)">← Back</button>
-      <button class="btn btn-primary" onclick="generateAll()">✓ Generate All &amp; Download</button>
+      <button class="btn btn-secondary" onclick="goTo(2)">&larr; Back</button>
+      <button class="btn btn-primary" onclick="generateAll()">&#x2713; Generate All &amp; Download</button>
     </div>
   </div>
 
-  <!-- ── Step 4: Download ───────────────────────────────── -->
+  <!-- Step 4: Download -->
   <div class="step-panel" id="panel-4">
     <div class="section">
       <div class="section-body" style="text-align:center;padding:32px 16px">
-        <span class="success-icon">✅</span>
+        <span class="success-icon">&#x2705;</span>
         <h2 style="margin:0 0 6px">Bulk generation complete!</h2>
         <p style="color:var(--muted);margin:0 0 4px">Processed <strong id="processed-count">0</strong> properties.</p>
         <div id="error-summary" style="color:#b91c1c;font-size:13px;margin-top:8px"></div>
@@ -241,13 +144,13 @@
       </div>
     </div>
     <div class="nav-row" style="justify-content:center">
-      <a class="btn btn-primary" href="/bulk_upload">➕ Upload Another Batch</a>
+      <a class="btn btn-primary" href="/bulk_upload">&#x2795; Upload Another Batch</a>
     </div>
   </div>
 
 </div>
 
-<footer>EasyFind Property Solutions &copy; 2025 — Internal Admin Tool</footer>
+<footer>EasyFind Property Solutions &copy; 2025 &mdash; Internal Admin Tool</footer>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -255,18 +158,14 @@ const TOKEN = '';
 let cardCount = 0;
 let bulkProperties = [];
 
-// ── Toast ─────────────────────────────────────────────────
 function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2600);
 }
 
-// ── Stepper ───────────────────────────────────────────────
 function goTo(step) {
-  document.querySelectorAll('.step-panel').forEach((p, i) => {
-    p.classList.toggle('visible', i + 1 === step);
-  });
+  document.querySelectorAll('.step-panel').forEach((p, i) => p.classList.toggle('visible', i + 1 === step));
   document.querySelectorAll('.stepper-item').forEach((s, i) => {
     s.classList.remove('active', 'done');
     if (i + 1 === step) s.classList.add('active');
@@ -275,7 +174,6 @@ function goTo(step) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-// ── Property cards ────────────────────────────────────────
 function addCard() {
   cardCount++;
   const n = cardCount;
@@ -285,36 +183,40 @@ function addCard() {
   card.id = `card-${n}`;
   card.innerHTML = `
     <div class="prop-card-title">Property #${n}</div>
-    <button class="remove-card-btn" onclick="removeCard('card-${n}')">✕ Remove</button>
+    <button class="remove-card-btn" onclick="removeCard('card-${n}')">&#x2715; Remove</button>
+
+    <!-- Raw Dump Textarea -->
     <div style="margin-bottom:14px">
-      <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:5px">💡 Smart Paste — paste raw property text and fields will be auto-filled</label>
-      <textarea class="f-raw-paste" rows="3" style="width:100%;font-size:12px;resize:vertical;border:1px solid var(--border);border-radius:6px;padding:8px" placeholder="Paste WhatsApp forward or broker listing here…"></textarea>
+      <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:5px">&#x1F4CB; Raw Property Data Dump &mdash; paste raw text and fields will be filled via server parser</label>
+      <textarea class="f-raw-paste" rows="5" style="width:100%;font-size:12px;resize:vertical;border:1px solid var(--border);border-radius:6px;padding:8px" placeholder="Paste WhatsApp forward or broker listing here&hellip;"></textarea>
       <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">
-        <button type="button" class="btn btn-secondary" style="font-size:12px;padding:5px 12px" onclick="mapCardPaste(document.getElementById('card-${n}'))">⚡ Map Fields</button>
-        <button type="button" class="btn btn-secondary" style="font-size:12px;padding:5px 12px" onclick="clearCardMapped(document.getElementById('card-${n}'))">✕ Clear Mapped</button>
+        <button type="button" class="btn btn-secondary" style="font-size:12px;padding:5px 12px" onclick="mapCardPaste(document.getElementById('card-${n}'))">&#x26A1; Map Fields</button>
+        <button type="button" class="btn btn-secondary" style="font-size:12px;padding:5px 12px" onclick="clearCardMapped(document.getElementById('card-${n}'))">&#x2715; Clear Mapped</button>
       </div>
       <div class="f-paste-result" style="font-size:11px;color:var(--muted);margin-top:5px"></div>
+      <div class="f-review-warnings"></div>
     </div>
+
     <div class="form-grid">
       <div class="form-group fg-full">
-        <label>Title <span class="req">*</span></label>
-        <input type="text" class="f-title" placeholder="e.g. Fully Furnished 2 BHK...">
+        <label>Property Title</label>
+        <input type="text" class="f-title" placeholder="e.g. Fully Furnished 2 BHK&hellip;">
       </div>
       <div class="form-group fg-third">
-        <label>Rent (₹) <span class="req">*</span></label>
-        <input type="number" class="f-rent" placeholder="45000">
+        <label>Rent <span class="req">*</span></label>
+        <input type="text" class="f-rent" placeholder="60k or 45000">
       </div>
       <div class="form-group fg-third">
-        <label>Maintenance (₹)</label>
-        <input type="number" class="f-maintenance" placeholder="2500">
+        <label>Maintenance</label>
+        <input type="text" class="f-maintenance" placeholder="5k or Inclusive">
       </div>
       <div class="form-group fg-third">
-        <label>Deposit (₹)</label>
-        <input type="number" class="f-deposit" placeholder="135000">
+        <label>Deposit</label>
+        <input type="text" class="f-deposit" placeholder="2L or 90000">
       </div>
       <div class="form-group fg-third">
         <label>Area (Sq. Ft.)</label>
-        <input type="number" class="f-sqft" placeholder="1250">
+        <input type="text" class="f-area-sqft" placeholder="1250">
       </div>
       <div class="form-group fg-third">
         <label>Floor</label>
@@ -322,7 +224,7 @@ function addCard() {
       </div>
       <div class="form-group fg-third">
         <label>Available From <span class="req">*</span></label>
-        <input type="text" class="f-available" placeholder="Immediate">
+        <input type="text" class="f-available" placeholder="August 1 or Ready to occupy">
       </div>
       <div class="form-group fg-third">
         <label>Preferred Tenant <span class="req">*</span></label>
@@ -330,33 +232,22 @@ function addCard() {
       </div>
       <div class="form-group fg-third">
         <label>Diet Preference</label>
-        <select class="f-diet">
-          <option value="">No Preference</option>
-          <option value="Vegetarian">Vegetarian Only</option>
-          <option value="Non-Vegetarian">Non-Vegetarian Only</option>
-        </select>
+        <input type="text" class="f-diet" placeholder="No Preference">
       </div>
       <div class="form-group fg-third">
         <label>Pets</label>
-        <select class="f-pets">
-          <option value="Not Allowed">Not Allowed</option>
-          <option value="Allowed">Allowed</option>
-          <option value="Small Pets Only">Small Pets Only</option>
-        </select>
+        <input type="text" class="f-pets" placeholder="Not Allowed">
       </div>
       <div class="form-group fg-third">
         <label>Community</label>
-        <select class="f-community">
-          <option value="Gated">Gated Society</option>
-          <option value="Semi-Gated">Semi-Gated</option>
-          <option value="Non-Society">Non-Society</option>
-        </select>
+        <input type="text" class="f-community" placeholder="Gated">
       </div>
       <div class="form-group fg-third">
         <label>Furnishing</label>
         <select class="f-furnishing">
+          <option value="">-- Select --</option>
           <option value="Fully Furnished">Fully Furnished</option>
-          <option value="Semi-Furnished">Semi-Furnished</option>
+          <option value="Semi Furnished">Semi Furnished</option>
           <option value="Unfurnished">Unfurnished</option>
         </select>
       </div>
@@ -369,8 +260,12 @@ function addCard() {
         <input type="text" class="f-property-name" placeholder="Salarpuria Serenity">
       </div>
       <div class="form-group fg-half">
+        <label>Gallery Link</label>
+        <input type="url" class="f-gallery" placeholder="https://drive.google.com/&hellip;">
+      </div>
+      <div class="form-group fg-half">
         <label>Google Maps Link</label>
-        <input type="url" class="f-map" placeholder="https://maps.google.com/...">
+        <input type="url" class="f-map" placeholder="https://maps.app.goo.gl/&hellip;">
       </div>
     </div>
   `;
@@ -387,36 +282,38 @@ function collectCards() {
   for (const card of cards) {
     const get = cls => card.querySelector(cls)?.value.trim() || '';
     const prop = {
+      raw_dump: get('.f-raw-paste'),
       title: get('.f-title'),
+      raw_title: get('.f-title'),
+      furnishing: get('.f-furnishing'),
       rent: get('.f-rent'),
       maintenance: get('.f-maintenance'),
       deposit: get('.f-deposit'),
-      sqft: get('.f-sqft'),
+      area_sqft: get('.f-area-sqft'),
       floor: get('.f-floor'),
       available_from: get('.f-available'),
       preferred_tenant: get('.f-tenant'),
       diet_preference: get('.f-diet'),
       pets: get('.f-pets'),
-      community: get('.f-community'),
-      furnishing: get('.f-furnishing'),
+      community_type: get('.f-community'),
       location: get('.f-location'),
       property_name: get('.f-property-name'),
-      map_link: get('.f-map'),
+      gallery_link: get('.f-gallery'),
+      google_maps_link: get('.f-map'),
     };
     props.push(prop);
   }
   return props;
 }
 
-// ── Step 1 → Step 2 ───────────────────────────────────────
 function goToPhotos() {
   const props = collectCards();
   if (props.length === 0) { showToast('Add at least one property.'); return; }
-  
-  const required = ['title', 'rent', 'available_from', 'preferred_tenant', 'location'];
+
+  const required = ['rent', 'available_from', 'preferred_tenant', 'location'];
   for (let i = 0; i < props.length; i++) {
     for (const req of required) {
-      if (!props[i][req]) {
+      if (!props[i][req] && !props[i].raw_dump) {
         showToast(`Property #${i+1} is missing: ${req}`);
         return;
       }
@@ -426,18 +323,19 @@ function goToPhotos() {
   bulkProperties = props;
   const uploadContainer = document.getElementById('bulk-image-uploads');
   uploadContainer.innerHTML = '';
-  
+
   props.forEach((p, i) => {
+    const label = p.property_name || p.title || `Property #${i+1}`;
     const row = document.createElement('div');
     row.className = 'img-upload-row';
     row.innerHTML = `
-      <label>#${i+1} · ${p.title}</label>
+      <label>#${i+1} &middot; ${label}</label>
       <input type="file" multiple accept="image/*" onchange="updateImgCount(this, ${i})">
       <span class="img-count" id="img-count-${i}">0 files</span>
     `;
     uploadContainer.appendChild(row);
   });
-  
+
   goTo(2);
 }
 
@@ -446,10 +344,9 @@ function updateImgCount(input, index) {
   document.getElementById(`img-count-${index}`).textContent = `${count} file${count !== 1 ? 's' : ''}`;
 }
 
-// ── Step 2 → Step 3 ───────────────────────────────────────
 async function goToPreview() {
   const grid = document.getElementById('preview-grid');
-  grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">Loading previews…</div>';
+  grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">Loading previews\u2026</div>';
   goTo(3);
 
   try {
@@ -463,15 +360,20 @@ async function goToPreview() {
 
     grid.innerHTML = '';
     document.getElementById('preview-count-label').textContent = `(${result.previews.length} properties)`;
-    
+
     result.previews.forEach((p, i) => {
       const card = document.createElement('div');
       card.className = 'preview-card';
+      const warningHtml = (p.needs_review && p.needs_review.length)
+        ? '<div class="review-banner">' + p.needs_review.map(w => '\u26A0\uFE0F ' + w).join('<br>') + '</div>'
+        : '';
       card.innerHTML = `
-        <div class="preview-card-title">${p.title}</div>
+        <div class="preview-card-title">${p.meta_title || 'Property ' + (i+1)}</div>
+        <div class="preview-meta-title">&#x1F4E6; Meta: ${p.meta_title || '&mdash;'}</div>
         <button class="copy-small" onclick="copyText(this)">Copy</button>
         <div class="preview-message">${p.message}</div>
         <div class="folder-pill">${p.drive_folder_name}</div>
+        ${warningHtml}
       `;
       grid.appendChild(card);
     });
@@ -484,12 +386,11 @@ function copyText(btn) {
   const text = btn.nextElementSibling.textContent;
   navigator.clipboard.writeText(text).then(() => {
     const old = btn.textContent;
-    btn.textContent = '✓ Copied';
+    btn.textContent = '\u2713 Copied';
     setTimeout(() => btn.textContent = old, 2000);
   });
 }
 
-// ── Step 3 → Step 4 ───────────────────────────────────────
 async function generateAll() {
   try {
     const resp = await fetch('/api/generate-bulk', {
@@ -502,17 +403,15 @@ async function generateAll() {
 
     document.getElementById('processed-count').textContent = result.processed_count;
     const errSummary = document.getElementById('error-summary');
-    if (result.errors && result.errors.length) {
-      errSummary.innerHTML = `⚠️ ${result.errors.length} errors occurred. Check the logs for details.`;
-    } else {
-      errSummary.innerHTML = '';
-    }
+    errSummary.innerHTML = (result.errors && result.errors.length)
+      ? `\u26A0\uFE0F ${result.errors.length} error(s) occurred.`
+      : '';
 
     const list = document.getElementById('download-list');
     list.innerHTML = `
-      <li><a href="${result.zip_file}" download>📦 All Messages & Data (.zip)</a></li>
-      <li><a href="${result.combined_txt}" download>📄 Combined Messages (.txt)</a></li>
-      <li><a href="${result.combined_json}" download>📊 Combined Data (.json)</a></li>
+      <li><a href="${result.zip_file}" download>&#x1F4E6; All Messages &amp; Data (.zip)</a></li>
+      <li><a href="${result.txt_file}" download>&#x1F4C4; Combined Messages (.txt)</a></li>
+      <li><a href="${result.json_file}" download>&#x1F4CA; Combined Data (.json)</a></li>
     `;
     goTo(4);
   } catch (err) {
@@ -520,140 +419,79 @@ async function generateAll() {
   }
 }
 
-// ── Smart Paste Mapping ───────────────────────────────────
+// ── Server-side Smart Paste per card ─────────────────────
 async function mapCardPaste(cardEl) {
   const raw = cardEl.querySelector('.f-raw-paste').value.trim();
   if (!raw) { showToast('Paste some property text first.'); return; }
 
   const resultEl = cardEl.querySelector('.f-paste-result');
-  resultEl.textContent = 'Analysing…';
+  const warningsEl = cardEl.querySelector('.f-review-warnings');
+  resultEl.textContent = 'Parsing on server\u2026';
+  warningsEl.innerHTML = '';
 
-  const extracted = {};
+  try {
+    const resp = await fetch('/api/parse-property', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ raw_text: raw }),
+    });
+    const result = await resp.json();
+    if (!result.success) { resultEl.textContent = 'Parse error: ' + result.error; return; }
 
-  // BHK
-  const bhkM = raw.match(/(\d)\s*(?:bhk|bedroom)/i);
-  let bhkStr = '';
-  if (bhkM) bhkStr = bhkM[1] + ' BHK';
+    const fields = result.fields || {};
+    // CSS class -> API key mapping
+    const fieldMap = [
+      ['.f-title',        'raw_title'],
+      ['.f-furnishing',   'furnishing'],
+      ['.f-rent',         'rent'],
+      ['.f-maintenance',  'maintenance'],
+      ['.f-deposit',      'deposit'],
+      ['.f-area-sqft',    'area_sqft'],
+      ['.f-floor',        'floor'],
+      ['.f-available',    'available_from'],
+      ['.f-tenant',       'preferred_tenant'],
+      ['.f-diet',         'diet_preference'],
+      ['.f-pets',         'pets'],
+      ['.f-community',    'community_type'],
+      ['.f-location',     'location'],
+      ['.f-property-name','property_name'],
+      ['.f-gallery',      'gallery_link'],
+      ['.f-map',          'google_maps_link'],
+    ];
 
-  // Price / Rent
-  const rentM = raw.match(/(?:₹\s*|rs\.?\s*)([\d,]+)\s*(?:\/\s*(?:month|mon|mo|pm))?/i);
-  if (rentM) extracted.rent = rentM[1].replace(/,/g, '');
-
-  // Maintenance
-  const maintM = raw.match(/maintenance[:\s₹]*([\d,]+)/i);
-  if (maintM) extracted.maintenance = maintM[1].replace(/,/g, '');
-
-  // Deposit
-  const depositM = raw.match(/deposit[:\s₹]*([\d,]+)/i);
-  if (depositM) extracted.deposit = depositM[1].replace(/,/g, '');
-
-  // Area
-  const areaM = raw.match(/([\d,]+(?:\.\d+)?)\s*(?:sqft|sq\.?\s*ft\.?|square\s*feet)/i);
-  if (areaM) extracted.sqft = areaM[1].replace(/,/g, '');
-
-  // Floor
-  const floorM = raw.match(/(\d+)(?:st|nd|rd|th)?\s*floor/i);
-  if (floorM) extracted.floor = floorM[1];
-
-  // Furnishing
-  if (/fully\s*(?:furnished|permitted)/i.test(raw))           extracted.furnishing = 'Fully Furnished';
-  else if (/semi[\s-]*(?:furnished|permitted)/i.test(raw))    extracted.furnishing = 'Semi-Furnished';
-  else if (/unfurnished|bare[\s-]*shell/i.test(raw))          extracted.furnishing = 'Unfurnished';
-
-  // Availability
-  if (/ready\s*to\s*(?:move|occupy)|immediate|vacant|available\s*now/i.test(raw)) {
-    extracted.available_from = 'Immediate';
-  }
-
-  // Google Maps URL
-  const mapsM = raw.match(/https?:\/\/(?:maps\.google\.com|goo\.gl\/maps|maps\.app\.goo\.gl|www\.google\.com\/maps)[^\s]*/i);
-  if (mapsM) extracted.map_link = mapsM[0];
-
-  // Location / locality
-  const localityPatterns = [
-    /(?:located?\s+(?:in|at)|location\s*[:–\-]|area\s*[:–\-]|locality\s*[:–\-])\s*([A-Za-z][a-zA-Z\s]{2,30}?)(?:,|\.|\n|bangalore|bengaluru|mumbai|delhi|hyderabad|chennai|pune|$)/i,
-    /\bin\s+([A-Z][a-zA-Z\s]{2,25}?)\s+(?:bangalore|bengaluru|mumbai|delhi|hyderabad|chennai|pune)/i,
-  ];
-  for (const pat of localityPatterns) {
-    const m = raw.match(pat);
-    if (m && m[1].trim().length > 2) { extracted.location = m[1].trim(); break; }
-  }
-  if (!extracted.location) {
-    const cities = ['bengaluru','bangalore','mumbai','delhi','hyderabad','chennai','pune','kolkata','ahmedabad','surat','jaipur','noida','gurgaon','gurugram'];
-    const cityFound = cities.find(c => raw.toLowerCase().includes(c));
-    if (cityFound) {
-      const cityAliases = { bangalore: 'Bengaluru', gurugram: 'Gurgaon' };
-      extracted.location = cityAliases[cityFound] || (cityFound[0].toUpperCase() + cityFound.slice(1));
-    }
-  }
-
-  // Society / apartment name from text
-  const societyPatterns = [
-    /(?:society|apartment|complex|building|tower|residences|residency|project)\s*[:–\-]\s*([A-Za-z][a-zA-Z\s]{3,40}?)(?:,|\.|\n|$)/i,
-    /\bat\s+([A-Z][a-zA-Z\s]{3,40}?)\s+(?:society|apartment|residences|towers|residency)/i,
-    /([A-Z][a-zA-Z\s]{3,40}?)\s+(?:Society|Apartment|Residences|Towers|Residency)\b/,
-  ];
-  for (const pat of societyPatterns) {
-    const m = raw.match(pat);
-    if (m) { extracted.property_name = m[1].trim(); break; }
-  }
-
-  // Preferred tenant
-  if (/\b(?:family|families)\b/i.test(raw) && /working|professional/i.test(raw)) extracted.preferred_tenant = 'Family / Working Professionals';
-  else if (/\b(?:family|families)\b/i.test(raw)) extracted.preferred_tenant = 'Family';
-  else if (/working|professional/i.test(raw)) extracted.preferred_tenant = 'Working Professionals';
-
-  // Auto-generate title if title field is empty
-  if (!cardEl.querySelector('.f-title').value && bhkStr) {
-    const loc = extracted.location || '';
-    extracted.title = loc ? `${bhkStr} Property • ${loc}` : `${bhkStr} Property`;
-  }
-
-  // Geocode Maps URL via backend → overrides/fills location + society
-  if (extracted.map_link) {
-    try {
-      const geo = await fetch('/api/geocode-location', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ maps_url: extracted.map_link }),
-      });
-      const gd = await geo.json();
-      if (gd.success) {
-        if (gd.place_name && !extracted.property_name) extracted.property_name = gd.place_name;
-        if (gd.establishment && !extracted.property_name) extracted.property_name = gd.establishment;
-        if (gd.locality) extracted.location = gd.locality;
-        else if (gd.city && !extracted.location) extracted.location = gd.city;
+    const applied = [];
+    const _mapped = cardEl._mappedFields || (cardEl._mappedFields = new Set());
+    fieldMap.forEach(([cls, apiKey]) => {
+      const val = fields[apiKey];
+      if (!val && val !== false) return;
+      const el = cardEl.querySelector(cls);
+      if (!el || el.value.trim()) return; // never overwrite
+      if (el.tagName === 'SELECT') {
+        for (const opt of el.options) {
+          if (opt.value.toLowerCase() === String(val).toLowerCase()) { el.value = opt.value; break; }
+        }
+      } else {
+        el.value = val;
       }
-    } catch (_) { /* non-blocking */ }
-  }
+      el.classList.add('mapped-highlight');
+      _mapped.add(cls);
+      applied.push(apiKey);
+    });
 
-  // Class → extracted key map
-  const fieldMap = {
-    '.f-title': 'title', '.f-rent': 'rent', '.f-maintenance': 'maintenance',
-    '.f-deposit': 'deposit', '.f-sqft': 'sqft', '.f-floor': 'floor',
-    '.f-furnishing': 'furnishing', '.f-available': 'available_from',
-    '.f-map': 'map_link', '.f-location': 'location',
-    '.f-property-name': 'property_name', '.f-tenant': 'preferred_tenant',
-  };
+    const allWarnings = [
+      ...(result.needs_review || []),
+      ...(result.unrecognized_lines || []).map(l => 'Unrecognized: ' + l),
+    ];
+    if (allWarnings.length) {
+      warningsEl.innerHTML = '<div class="review-banner">\u26A0\uFE0F ' + allWarnings.join(' &bull; ') + '</div>';
+    }
 
-  const applied = [];
-  const _mapped = cardEl._mappedFields || (cardEl._mappedFields = new Set());
-  Object.entries(fieldMap).forEach(([cls, key]) => {
-    if (!(key in extracted)) return;
-    const el = cardEl.querySelector(cls);
-    if (!el || el.value) return; // never overwrite already-filled fields
-    el.value = extracted[key];
-    el.style.background = '#fffbe6';
-    _mapped.add(cls);
-    applied.push(key);
-  });
-
-  if (applied.length) {
-    resultEl.textContent = `✓ Mapped: ${applied.join(', ')}`;
-    showToast(`✓ Mapped ${applied.length} field${applied.length > 1 ? 's' : ''}`);
-  } else {
-    resultEl.textContent = 'Nothing new to map — fields may already be filled or no matching data found.';
-    showToast('Nothing new to map.');
+    resultEl.textContent = applied.length
+      ? '\u2713 Mapped: ' + applied.join(', ')
+      : 'Nothing new to map.';
+    if (applied.length) showToast('\u2713 Mapped ' + applied.length + ' field' + (applied.length > 1 ? 's' : ''));
+  } catch (err) {
+    resultEl.textContent = 'Request failed: ' + err.message;
   }
 }
 
@@ -662,7 +500,7 @@ function clearCardMapped(cardEl) {
   if (_mapped) {
     _mapped.forEach(cls => {
       const el = cardEl.querySelector(cls);
-      if (el) { el.value = ''; el.style.background = ''; }
+      if (el) { el.value = ''; el.classList.remove('mapped-highlight'); }
     });
     _mapped.clear();
   }
@@ -670,10 +508,11 @@ function clearCardMapped(cardEl) {
   if (rawEl) rawEl.value = '';
   const resultEl = cardEl.querySelector('.f-paste-result');
   if (resultEl) resultEl.textContent = '';
+  const warnEl = cardEl.querySelector('.f-review-warnings');
+  if (warnEl) warnEl.innerHTML = '';
   showToast('Cleared mapped fields for this property.');
 }
 
-// ── Init ──────────────────────────────────────────────────
 addCard();
 </script>
 </body>

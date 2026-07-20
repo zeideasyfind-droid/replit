@@ -3,20 +3,59 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Property Listed — EasyFind Admin</title>
+  <title>Property Listed &mdash; EasyFind Admin</title>
   <link rel="stylesheet" href="/static/style.css">
+  <style>
+    .verify-section {
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+    .verify-header {
+      padding: 12px 18px;
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      background: #f8f9fa;
+      border-bottom: 1px solid var(--border);
+    }
+    .verify-body {
+      padding: 16px 18px;
+    }
+    .verify-row {
+      display: flex;
+      gap: 8px;
+      font-size: 13px;
+      padding: 4px 0;
+      border-bottom: 1px solid #f1f3f4;
+      align-items: flex-start;
+    }
+    .verify-row:last-child { border-bottom: none; }
+    .verify-label {
+      min-width: 180px;
+      font-weight: 600;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+    .verify-val { color: var(--text); word-break: break-all; }
+    .badge-ok   { color: #1a7f45; font-weight: 700; }
+    .badge-fail { color: #b91c1c; font-weight: 700; }
+    .badge-skip { color: #92400e; font-weight: 700; }
+  </style>
 </head>
 <body>
 <header>
   <div>
     <div class="logo">EasyFind Admin</div>
-    <div class="sub">EasyFind Property Solutions — Internal Tool</div>
+    <div class="sub">EasyFind Property Solutions &mdash; Internal Tool</div>
   </div>
   <div style="margin-left:auto">
     {% if mock_mode %}
-      <span class="badge badge-mock">⚠ Mock Mode</span>
+      <span class="badge badge-mock">&#x26A0; Mock Mode</span>
     {% else %}
-      <span class="badge badge-live">● Live Mode</span>
+      <span class="badge badge-live">&#x25CF; Live Mode</span>
     {% endif %}
   </div>
 </header>
@@ -25,19 +64,19 @@
 
   {% if meta_error %}
   <div class="alert alert-error">
-    <strong>❌ Meta Catalog API Error</strong><br>
+    <strong>&#x274C; Meta Catalog API Error</strong><br>
     {{ meta_error }}
   </div>
   {% else %}
   <div class="alert alert-success">
-    <strong>✅ Property submitted successfully to Meta Catalog!</strong>
-    {% if mock_mode %}<br><em>(MOCK MODE — no real API calls were made)</em>{% endif %}
+    <strong>&#x2705; Property submitted successfully to Meta Catalog!</strong>
+    {% if mock_mode %}<br><em>(MOCK MODE &mdash; no real API calls were made)</em>{% endif %}
   </div>
   {% endif %}
 
   <!-- Property Summary -->
   <div class="card">
-    <h2>🏠 Property Details</h2>
+    <h2>&#x1F3E0; Property Details</h2>
     <div class="prop-hero">
       {% if image_urls %}
       <img src="{{ image_urls[0] }}" alt="Primary property image">
@@ -71,14 +110,127 @@
 
     <div style="margin-top:16px">
       <a href="{{ maps_link }}" target="_blank" class="maps-link">
-        📍 View on Google Maps — {{ property.locality }}, {{ property.city }}
+        &#x1F4CD; View on Google Maps &mdash; {{ property.locality }}, {{ property.city }}
       </a>
     </div>
   </div>
 
-  <!-- Meta Response -->
+  <!-- ── Submission Verification ── -->
   <div class="card">
-    <h2>📡 Meta Catalog API Response
+    <h2>&#x1F50D; Submission Verification</h2>
+
+    <!-- Meta Catalogue -->
+    <div class="verify-section">
+      <div class="verify-header">&#x1F4E6; Meta Catalogue</div>
+      <div class="verify-body">
+        <div class="verify-row">
+          <span class="verify-label">Status</span>
+          <span class="verify-val">
+            {% if meta_error %}
+              <span class="badge-fail">&#x274C; Failed</span>
+            {% elif meta_handle %}
+              <span class="badge-ok">&#x2705; Created / Updated</span>
+            {% else %}
+              <span class="badge-skip">&#x26A0;&#xFE0F; No handle returned</span>
+            {% endif %}
+          </span>
+        </div>
+        <div class="verify-row">
+          <span class="verify-label">Property ID</span>
+          <span class="verify-val">{{ property.property_id }}</span>
+        </div>
+        <div class="verify-row">
+          <span class="verify-label">Meta Item Handle</span>
+          <span class="verify-val">{{ meta_handle if meta_handle else '&mdash;' }}</span>
+        </div>
+        <div class="verify-row">
+          <span class="verify-label">Submitted Title</span>
+          <span class="verify-val">{{ meta_title if meta_title else '&mdash;' }}</span>
+        </div>
+        <div class="verify-row">
+          <span class="verify-label">Result</span>
+          <span class="verify-val">
+            {% if meta_error %}
+              {{ meta_error }}
+            {% elif meta_handle %}
+              Meta catalog item accepted (handle: {{ meta_handle }})
+            {% else %}
+              {% if mock_mode %}MOCK MODE &mdash; no real API call made{% else %}No handle returned from Meta API{% endif %}
+            {% endif %}
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- WhatsApp -->
+    <div class="verify-section">
+      <div class="verify-header">&#x1F4AC; WhatsApp</div>
+      <div class="verify-body">
+        <div class="verify-row">
+          <span class="verify-label">Status</span>
+          <span class="verify-val">
+            {% if whatsapp_result.status == 'sent' %}
+              <span class="badge-ok">&#x2705; Accepted by WhatsApp API</span>
+            {% elif whatsapp_result.status == 'failed' %}
+              <span class="badge-fail">&#x274C; Failed</span>
+            {% else %}
+              <span class="badge-skip">&#x23ED; {{ whatsapp_result.status | capitalize }}</span>
+            {% endif %}
+          </span>
+        </div>
+        <div class="verify-row">
+          <span class="verify-label">Recipient</span>
+          <span class="verify-val">{{ whatsapp_result.recipient if whatsapp_result.recipient else '&mdash;' }}</span>
+        </div>
+        <div class="verify-row">
+          <span class="verify-label">Message ID</span>
+          <span class="verify-val">{{ whatsapp_result.message_id if whatsapp_result.message_id else '&mdash;' }}</span>
+        </div>
+        <div class="verify-row">
+          <span class="verify-label">Message Type</span>
+          <span class="verify-val">
+            {% if whatsapp_result.message_type == 'image_with_caption' %}
+              Image with caption
+            {% elif whatsapp_result.message_type == 'text_fallback' %}
+              Text fallback
+            {% else %}
+              {{ whatsapp_result.message_type if whatsapp_result.message_type else '&mdash;' }}
+            {% endif %}
+          </span>
+        </div>
+        <div class="verify-row">
+          <span class="verify-label">Cover Image</span>
+          <span class="verify-val">
+            {% if whatsapp_result.cover_image %}
+              <span class="badge-ok">&#x2705; Attached</span>
+            {% else %}
+              <span class="badge-skip">&#x26A0;&#xFE0F; Text fallback (no cover image)</span>
+            {% endif %}
+          </span>
+        </div>
+        <div class="verify-row">
+          <span class="verify-label">Result</span>
+          <span class="verify-val">
+            {% if whatsapp_result.status == 'sent' %}
+              Accepted by WhatsApp API. Message ID: {{ whatsapp_result.message_id or 'N/A' }}
+            {% elif whatsapp_result.status == 'failed' %}
+              {% if whatsapp_result.error is mapping %}
+                {{ whatsapp_result.error | tojson }}
+              {% else %}
+                {{ whatsapp_result.error }}
+              {% endif %}
+            {% else %}
+              {% if mock_mode %}MOCK MODE &mdash; no real API call made{% else %}{{ whatsapp_result.status }}{% endif %}
+            {% endif %}
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Meta Response (raw) -->
+  <div class="card">
+    <h2>&#x1F4E1; Meta Catalog API Response
       <span style="margin-left:8px">
         {% if mock_mode %}<span class="badge badge-mock">Mock</span>{% else %}<span class="badge badge-live">Live</span>{% endif %}
       </span>
@@ -92,35 +244,21 @@
     {% endif %}
   </div>
 
-  <!-- WhatsApp Status -->
-  <div class="card">
-    <h2>💬 WhatsApp Confirmation</h2>
-    {% if whatsapp_result.status == 'sent' %}
-      <p class="wa-sent">✅ Message sent successfully</p>
-      <div class="json-block" style="margin-top:10px">{{ whatsapp_result.response | tojson(indent=2) }}</div>
-    {% elif whatsapp_result.status == 'failed' %}
-      <p class="wa-failed">⚠️ WhatsApp message failed (catalog was still updated)</p>
-      <div class="json-block" style="margin-top:10px">{{ whatsapp_result.error | tojson(indent=2) if whatsapp_result.error is mapping else whatsapp_result.error }}</div>
-    {% else %}
-      <p style="color:var(--muted)">{{ whatsapp_result.status | capitalize }}</p>
-    {% endif %}
-  </div>
-
   <!-- Actions -->
   <div class="card">
     <div style="display:flex;gap:12px;flex-wrap:wrap">
       <a href="/admin/property{% if token %}?token={{ token }}{% endif %}" class="btn btn-primary">
-        ➕ Add Another Property
+        &#x2795; Add Another Property
       </a>
       <a href="/catalog/property/{{ property.property_id }}{% if token %}?token={{ token }}{% endif %}"
          class="btn" style="background:#f1f3f4;color:var(--text)">
-        🔍 Debug Info for {{ property.property_id }}
+        &#x1F50D; Debug Info for {{ property.property_id }}
       </a>
     </div>
   </div>
 
 </div>
 
-<footer>EasyFind Property Solutions &copy; 2025 — Internal Admin Tool</footer>
+<footer>EasyFind Property Solutions &copy; 2025 &mdash; Internal Admin Tool</footer>
 </body>
 </html>
